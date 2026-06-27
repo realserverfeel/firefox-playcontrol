@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PlayControl Settings</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="wrap">
+    <h1>&#9654; PlayControl Settings</h1>
+
+    <section class="card">
+      <h2>Shortcuts</h2>
+      <p class="desc">Click a shortcut, then press the key combination. Shortcuts work while a YouTube tab is focused. Press <kbd>Esc</kbd> while recording to clear.</p>
+      <div id="shortcuts" class="shortcuts"></div>
+    </section>
+
+    <section class="card">
+      <h2>Playback</h2>
+      <label class="row">
+        <span>Seek step (seconds)</span>
+        <input type="number" id="seekSeconds" min="1" max="600" step="1" />
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>On-screen display (OSD)</h2>
+      <label class="row">
+        <span>Show OSD text</span>
+        <input type="checkbox" id="osdEnabled" />
+      </label>
+      <label class="row">
+        <span>Font size (px)</span>
+        <input type="number" id="osdFontSize" min="10" max="96" step="1" />
+      </label>
+      <label class="row">
+        <span>Text color</span>
+        <input type="color" id="osdColor" />
+      </label>
+      <label class="row">
+        <span>Display duration (ms)</span>
+        <input type="number" id="osdDuration" min="300" max="6000" step="100" />
+      </label>
+      <div class="row">
+        <span>Preview</span>
+        <button id="osdPreview" class="btn">Test OSD on active YouTube tab</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Data</h2>
+      <div class="btn-row">
+        <button id="export" class="btn">Export JSON</button>
+        <button id="importBtn" class="btn">Import JSON</button>
+        <button id="openManager" class="btn">Open bookmark manager</button>
+        <button id="clearAll" class="btn danger">Clear all bookmarks</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json" hidden />
+    </section>
+
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script src="../src/defaults.js"></script>
+  <script src="../src/storage.js"></script>
+  <script src="../src/shortcuts.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

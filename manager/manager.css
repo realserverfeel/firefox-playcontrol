@@ -1,0 +1,167 @@
+:root {
+  --bg: #141417;
+  --card: #202026;
+  --card2: #26262d;
+  --text: #f1f1f3;
+  --muted: #9a9aa4;
+  --accent: #3b9dff;
+  --border: #33333b;
+  --danger: #e0556b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 14px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: #1a1a1f;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.brand { font-weight: 700; font-size: 16px; }
+.brand::first-letter { color: var(--accent); }
+.spacer { flex: 1; }
+
+.wrap { max-width: 880px; margin: 0 auto; padding: 20px 16px 80px; }
+
+.toolbar { display: flex; gap: 10px; margin-bottom: 16px; }
+#search {
+  flex: 1;
+  padding: 9px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+}
+#sort {
+  padding: 9px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+}
+
+.videos { display: flex; flex-direction: column; gap: 10px; }
+
+.video-card {
+  display: flex;
+  gap: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.video-card:hover { border-color: var(--accent); }
+.thumb {
+  width: 120px; height: 68px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #000;
+  flex-shrink: 0;
+}
+.video-info { flex: 1; min-width: 0; }
+.video-title {
+  font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.video-sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.chips { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font-size: 11px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: var(--muted);
+}
+
+.empty { color: var(--muted); text-align: center; padding: 60px 20px; }
+
+/* detail */
+.detail-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.detail-title { flex: 1; font-size: 18px; font-weight: 700; }
+
+.timeline {
+  position: relative;
+  height: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  margin-bottom: 18px;
+}
+.tl-mark {
+  position: absolute;
+  top: -3px;
+  width: 3px;
+  height: 20px;
+  background: var(--accent);
+  border-radius: 2px;
+  transform: translateX(-50%);
+}
+
+.bm-table { width: 100%; border-collapse: collapse; }
+.bm-table th, .bm-table td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.bm-table th { color: var(--muted); font-weight: 600; font-size: 12px; }
+.actions-col { text-align: right; }
+.td-actions { text-align: right; white-space: nowrap; }
+.note-input {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text);
+  padding: 4px 6px;
+}
+.note-input:hover, .note-input:focus { border-color: var(--border); outline: none; background: var(--card); }
+.time-link { color: var(--accent); cursor: pointer; text-decoration: none; }
+.time-link:hover { text-decoration: underline; }
+
+.detail-actions { margin-top: 20px; display: flex; gap: 10px; }
+
+.btn {
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card2);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  text-decoration: none;
+  display: inline-block;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.icon { padding: 5px 8px; }
+.btn.danger { border-color: var(--danger); color: var(--danger); }
+.btn.danger:hover { background: var(--danger); color: #fff; }
+
+.toast {
+  position: fixed;
+  bottom: 24px; left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--accent);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 8px;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
