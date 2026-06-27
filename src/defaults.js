@@ -14,6 +14,7 @@
     nextBookmark: "nextBookmark",
     playSegment: "playSegment",
     copyUrl: "copyUrl",
+    clearBookmarks: "clearBookmarks",
   };
 
   // Human-readable labels for the options UI.
@@ -26,6 +27,7 @@
     nextBookmark: "Next bookmark",
     playSegment: "Play current segment (prev bookmark \u2192 next bookmark)",
     copyUrl: "Copy URL at current time",
+    clearBookmarks: "Clear all bookmarks for current video",
   };
 
   // Default shortcuts use KeyboardEvent.code values (physical keys), so they
@@ -39,11 +41,18 @@
     nextBookmark: "PageDown",
     playSegment: "",
     copyUrl: "",
+    clearBookmarks: "",
   };
 
   const DEFAULT_SETTINGS = {
     seekSeconds: 5,
     shortcuts: { ...DEFAULT_SHORTCUTS },
+    // Require pressing the clear-bookmarks shortcut twice within a few seconds.
+    confirmClearBookmarks: true,
+    // When true, control actions wake YouTube's native player controls / seek
+    // bar (best-effort synthetic mousemove on the player). Off keeps the
+    // minimal, no-touch footprint.
+    activateNativeControls: false,
     osd: {
       enabled: true,
       fontSize: 24,

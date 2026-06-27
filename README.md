@@ -21,13 +21,18 @@ bar, or layout.
   - *Play current segment* (jump to previous bookmark, play until the next
     bookmark, then pause) — unassigned by default, set it in Settings
   - *Copy URL at current time* (no bookmark created) — unassigned by default
+  - *Clear all bookmarks for current video* — unassigned by default; optional
+    two-press confirmation (toggle in Settings)
 - **PotPlayer-style OSD**: blue text in the top-right of the video shows each
   action. Font size, color, and duration are configurable.
 - **Bookmark manager** (full page): list of all videos with thumbnails, search
   and sort, per-video bookmark editing (notes, jump, copy timestamped URL,
   delete), and timeline preview.
-- **Data**: stored in `browser.storage.local`. JSON export / import
-  (merge or replace).
+- **Data**: stored in `browser.storage.local` with the `unlimitedStorage`
+  permission (no practical size cap). JSON export / import (merge or replace).
+- **Native controls**: optional setting to wake YouTube's native player
+  controls / seek bar when a shortcut is used (off by default to keep the
+  minimal footprint).
 - All shortcuts are remappable in **Settings**.
 
 ## Project structure

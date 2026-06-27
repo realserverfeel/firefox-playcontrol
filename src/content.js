@@ -15,6 +15,7 @@
   let osdEl = null;
   let osdTimer = null;
   let segmentStopTime = null; // when set, pause once currentTime passes it
+  let clearConfirmTimer = null; // pending double-press to confirm clear
 
   // ---- video discovery ---------------------------------------------------
 
@@ -135,8 +136,36 @@
       showOsd("\u26A0 No video id");
       return;
     }
-    const bm = await STORE.addBookmark(meta, video.currentTime);
-    showOsd(`\uD83D\uDCCC Bookmark  (${fmtTime(bm.time)})`);
+    try {
+      const bm = await STORE.addBookmark(meta, video.currentTime);
+      showOsd(`\uD83D\uDCCC Bookmark  (${fmtTime(bm.time)})`);
+    } catch (e) {
+      showOsd("\u26A0 Storage full");
+    }
+  }
+
+  async function clearBookmarksAction(video) {
+    const meta = getMeta();
+    if (!meta.videoId) return;
+    const v = await STORE.getVideo(meta.videoId);
+    if (!v || v.bookmarks.length === 0) {
+      showOsd("\uD83D\uDCCC No bookmarks");
+      return;
+    }
+    // Optional two-step confirmation: first press arms, second press clears.
+    if (settings.confirmClearBookmarks && !clearConfirmTimer) {
+      showOsd(`\u26A0 Press again to clear ${v.bookmarks.length} bookmark(s)`);
+      clearConfirmTimer = setTimeout(() => {
+        clearConfirmTimer = null;
+      }, 4000);
+      return;
+    }
+    if (clearConfirmTimer) {
+      clearTimeout(clearConfirmTimer);
+      clearConfirmTimer = null;
+    }
+    await STORE.clearBookmarks(meta.videoId);
+    showOsd("\uD83D\uDDD1 All bookmarks cleared");
   }
 
   async function jumpBookmark(video, dir) {
@@ -224,7 +253,26 @@
     nextBookmark: (v) => jumpBookmark(v, 1),
     playSegment: (v) => playSegment(v),
     copyUrl: (v) => copyUrl(v),
+    clearBookmarks: (v) => clearBookmarksAction(v),
   };
+
+  // Best-effort: wake YouTube's native controls / seek bar so they flash on
+  // shortcut use. Uses a YouTube-specific selector but degrades silently.
+  function wakeNativeControls(video) {
+    const player =
+      (video && (video.closest(".html5-video-player") || video.parentElement)) ||
+      document.querySelector("#movie_player, .html5-video-player");
+    if (!player) return;
+    const rect = player.getBoundingClientRect();
+    const evt = new MouseEvent("mousemove", {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height - 10,
+    });
+    player.dispatchEvent(evt);
+  }
 
   function runAction(action) {
     const video = getVideo();
@@ -234,6 +282,7 @@
     }
     const fn = HANDLERS[action];
     if (fn) fn(video);
+    if (settings.activateNativeControls) wakeNativeControls(video);
   }
 
   // ---- key handling ------------------------------------------------------
