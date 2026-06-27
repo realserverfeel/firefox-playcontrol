@@ -184,7 +184,7 @@
       return;
     }
     const now = video.currentTime;
-    const eps = 0.4;
+    const eps = settings.bookmarkProximity;
     let target = null;
     if (dir < 0) {
       for (let i = bms.length - 1; i >= 0; i--) {
@@ -217,7 +217,7 @@
       return;
     }
     const now = video.currentTime;
-    const eps = 0.4;
+    const eps = settings.bookmarkProximity;
 
     // Repeat the same segment if we just finished it and haven't moved away
     // (e.g. still paused at its end). Otherwise compute a fresh segment from

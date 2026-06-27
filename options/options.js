@@ -14,6 +14,7 @@
     seekSeconds: document.getElementById("seekSeconds"),
     activateNativeControls: document.getElementById("activateNativeControls"),
     confirmClearBookmarks: document.getElementById("confirmClearBookmarks"),
+    bookmarkProximity: document.getElementById("bookmarkProximity"),
     osdEnabled: document.getElementById("osdEnabled"),
     osdFontSize: document.getElementById("osdFontSize"),
     osdColor: document.getElementById("osdColor"),
@@ -101,6 +102,7 @@
     els.seekSeconds.value = settings.seekSeconds;
     els.activateNativeControls.checked = settings.activateNativeControls;
     els.confirmClearBookmarks.checked = settings.confirmClearBookmarks;
+    els.bookmarkProximity.value = settings.bookmarkProximity;
     els.osdEnabled.checked = settings.osd.enabled;
     els.osdFontSize.value = settings.osd.fontSize;
     els.osdColor.value = settings.osd.color;
@@ -117,6 +119,13 @@
     });
     els.confirmClearBookmarks.addEventListener("change", () => {
       settings.confirmClearBookmarks = els.confirmClearBookmarks.checked;
+      save().then(() => toast("Saved"));
+    });
+    els.bookmarkProximity.addEventListener("change", () => {
+      let v = parseFloat(els.bookmarkProximity.value);
+      if (isNaN(v) || v < 0) v = 0.8;
+      settings.bookmarkProximity = v;
+      els.bookmarkProximity.value = v;
       save().then(() => toast("Saved"));
     });
     els.osdEnabled.addEventListener("change", () => {

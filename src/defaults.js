@@ -49,6 +49,9 @@
     shortcuts: { ...DEFAULT_SHORTCUTS },
     // Require pressing the clear-bookmarks shortcut twice within a few seconds.
     confirmClearBookmarks: true,
+    // Proximity window (seconds). A bookmark passed less than this long ago is
+    // skipped by "previous bookmark" (jumps to the one before it instead).
+    bookmarkProximity: 0.8,
     // When true, control actions wake YouTube's native player controls / seek
     // bar (best-effort synthetic mousemove on the player). Off keeps the
     // minimal, no-touch footprint.
