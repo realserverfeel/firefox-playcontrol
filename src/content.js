@@ -284,20 +284,38 @@
 
   // Best-effort: wake YouTube's native controls / seek bar so they flash on
   // shortcut use. Uses a YouTube-specific selector but degrades silently.
+  //
+  // YouTube's autohide only resets its hide timer when the pointer actually
+  // *moves*, so dispatching the same coordinates repeatedly stops working after
+  // the first time. We jitter the coordinates on every call (and send a tiny
+  // follow-up move) so each invocation reads as real movement.
+  let wakeTick = 0;
   function wakeNativeControls(video) {
     const player =
       (video && (video.closest(".html5-video-player") || video.parentElement)) ||
       document.querySelector("#movie_player, .html5-video-player");
     if (!player) return;
     const rect = player.getBoundingClientRect();
-    const evt = new MouseEvent("mousemove", {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-      clientX: rect.left + rect.width / 2,
-      clientY: rect.top + rect.height - 10,
-    });
-    player.dispatchEvent(evt);
+    wakeTick++;
+    const jitter = (wakeTick % 2 === 0) ? 1 : -1;
+    const baseX = rect.left + rect.width / 2;
+    const baseY = rect.top + rect.height / 2;
+
+    const fire = (x, y) => {
+      player.dispatchEvent(new MouseEvent("mousemove", {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: x,
+        clientY: y,
+        movementX: jitter,
+        movementY: 0,
+      }));
+    };
+
+    // Two moves a frame apart guarantee a non-zero delta is observed.
+    fire(baseX, baseY);
+    requestAnimationFrame(() => fire(baseX + jitter * 3, baseY + jitter * 2));
   }
 
   function runAction(action) {
