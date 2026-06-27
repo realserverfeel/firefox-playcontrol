@@ -15,6 +15,8 @@
   let osdEl = null;
   let osdTimer = null;
   let segmentStopTime = null; // when set, pause once currentTime passes it
+  let lastSegment = null; // { start, end } of the most recently played segment
+  let replayArmed = false; // true right after a segment auto-stops
   let clearConfirmTimer = null; // pending double-press to confirm clear
 
   // ---- video discovery ---------------------------------------------------
@@ -113,6 +115,9 @@
   // ---- actions -----------------------------------------------------------
 
   function togglePlay(video) {
+    // Resuming playback exits any segment loop and continues naturally.
+    segmentStopTime = null;
+    replayArmed = false;
     if (video.paused) {
       video.play();
       showOsd("\u25B6 Play");
@@ -124,6 +129,7 @@
 
   function seek(video, delta) {
     segmentStopTime = null;
+    replayArmed = false;
     const t = Math.max(0, Math.min(video.duration || Infinity, video.currentTime + delta));
     video.currentTime = t;
     const sign = delta >= 0 ? "+" : "\u2212";
@@ -194,6 +200,7 @@
       return;
     }
     segmentStopTime = null;
+    replayArmed = false;
     video.currentTime = target.time;
     const label = target.label ? `  ${target.label}` : "";
     showOsd(`${dir < 0 ? "\u23EE" : "\u23ED"} ${fmtTime(target.time)}${label}`);
@@ -211,6 +218,18 @@
     }
     const now = video.currentTime;
     const eps = 0.4;
+
+    // Repeat the same segment if we just finished it and haven't moved away
+    // (e.g. still paused at its end). Otherwise compute a fresh segment from
+    // the current position.
+    const atLastEnd =
+      lastSegment &&
+      (lastSegment.end == null || Math.abs(now - lastSegment.end) < eps);
+    if (replayArmed && atLastEnd) {
+      startSegment(video, lastSegment.start, lastSegment.end, true);
+      return;
+    }
+
     let start = 0;
     let end = null;
     for (let i = bms.length - 1; i >= 0; i--) {
@@ -219,10 +238,17 @@
     for (let i = 0; i < bms.length; i++) {
       if (bms[i].time > start + eps) { end = bms[i].time; break; }
     }
+    startSegment(video, start, end, false);
+  }
+
+  function startSegment(video, start, end, isReplay) {
     video.currentTime = start;
     segmentStopTime = end; // null means play to end of video
+    lastSegment = { start, end };
+    replayArmed = false; // re-armed when this segment auto-stops
     video.play();
-    showOsd(`\u25B6 Segment ${fmtTime(start)} \u2192 ${end != null ? fmtTime(end) : "end"}`);
+    const icon = isReplay ? "\uD83D\uDD01" : "\u25B6";
+    showOsd(`${icon} Segment ${fmtTime(start)} \u2192 ${end != null ? fmtTime(end) : "end"}`);
   }
 
   async function copyUrl(video) {
@@ -314,6 +340,7 @@
     if (e.target.currentTime >= segmentStopTime) {
       e.target.pause();
       segmentStopTime = null;
+      replayArmed = true; // press playSegment again to repeat this segment
       showOsd("\u2759\u2759 Segment end");
     }
   }
