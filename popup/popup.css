@@ -62,3 +62,26 @@ body {
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 
 .hint { color: var(--muted); font-size: 11px; margin-top: 10px; line-height: 1.5; }
+
+.hidden { display: none !important; }
+
+.bridge {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+.bridge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bridge-row + .bridge-row { margin-top: 8px; }
+.bridge-label { font-weight: 600; }
+.bridge-status { font-size: 12px; }
+.bridge-status.ok { color: #5ad17a; }
+.bridge-status.wait { color: #d1b35a; }
+.pin-state { color: var(--muted); font-size: 12px; }
+.btn.small { flex: 0 0 auto; padding: 5px 10px; font-size: 12px; }

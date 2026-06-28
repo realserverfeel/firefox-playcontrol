@@ -2,3 +2,10 @@ node_modules/
 web-ext-artifacts/
 *.zip
 .DS_Store
+
+# .NET build output (local companion app)
+local-app/bin/
+local-app/obj/
+local-app/publish/
+# Runtime config written next to the exe
+local-app/config.json

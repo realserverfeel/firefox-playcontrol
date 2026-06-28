@@ -19,6 +19,9 @@
     osdFontSize: document.getElementById("osdFontSize"),
     osdColor: document.getElementById("osdColor"),
     osdDuration: document.getElementById("osdDuration"),
+    ghEnabled: document.getElementById("ghEnabled"),
+    ghPort: document.getElementById("ghPort"),
+    ghStatus: document.getElementById("ghStatus"),
     toast: document.getElementById("toast"),
   };
 
@@ -142,6 +145,9 @@
     els.osdFontSize.value = settings.osd.fontSize;
     els.osdColor.value = settings.osd.color;
     els.osdDuration.value = settings.osd.durationMs;
+    const gh = settings.globalHotkeys || { enabled: false, port: 8423 };
+    els.ghEnabled.checked = !!gh.enabled;
+    els.ghPort.value = gh.port || 8423;
 
     els.seekSeconds.addEventListener("change", () => {
       settings.seekSeconds = Math.max(1, parseInt(els.seekSeconds.value, 10) || 5);
@@ -181,6 +187,35 @@
       els.osdDuration.value = settings.osd.durationMs;
       save().then(() => toast("Saved"));
     });
+    els.ghEnabled.addEventListener("change", () => {
+      if (!settings.globalHotkeys) settings.globalHotkeys = { enabled: false, port: 8423 };
+      settings.globalHotkeys.enabled = els.ghEnabled.checked;
+      save().then(() => toast("Saved"));
+    });
+    els.ghPort.addEventListener("change", () => {
+      if (!settings.globalHotkeys) settings.globalHotkeys = { enabled: false, port: 8423 };
+      let p = parseInt(els.ghPort.value, 10);
+      if (isNaN(p) || p < 1 || p > 65535) p = 8423;
+      settings.globalHotkeys.port = p;
+      els.ghPort.value = p;
+      save().then(() => toast("Saved"));
+    });
+  }
+
+  function pollGhStatus() {
+    api.runtime.sendMessage({ type: "PC_GET_BRIDGE_STATE" }).then((res) => {
+      const st = res && res.bridge;
+      if (!st || !st.enabled) {
+        els.ghStatus.textContent = "disabled";
+        els.ghStatus.className = "gh-status";
+      } else if (st.connected) {
+        els.ghStatus.textContent = "\u25CF connected to local app";
+        els.ghStatus.className = "gh-status ok";
+      } else {
+        els.ghStatus.textContent = "\u25CB enabled, waiting for local app\u2026";
+        els.ghStatus.className = "gh-status wait";
+      }
+    }).catch(() => {});
   }
 
   // ---- data management ---------------------------------------------------
@@ -257,5 +292,7 @@
     settings = s;
     renderShortcuts();
     bindFields();
+    pollGhStatus();
+    setInterval(pollGhStatus, 1500);
   });
 })();

@@ -6,6 +6,14 @@
   const titleEl = document.getElementById("title");
   const metaEl = document.getElementById("meta");
   const hintEl = document.getElementById("hint");
+  const bridgeEl = document.getElementById("bridge");
+  const bridgeStatusEl = document.getElementById("bridge-status");
+  const pinRowEl = document.getElementById("pin-row");
+  const pinStateEl = document.getElementById("pin-state");
+  const pinBtn = document.getElementById("pin-btn");
+
+  let currentTabId = null;
+  let currentTabIsYouTube = false;
 
   function fmtTime(sec) {
     sec = Math.max(0, Math.floor(sec || 0));
@@ -17,7 +25,10 @@
   async function queryActiveTab() {
     const tabs = await api.tabs.query({ active: true, currentWindow: true });
     const tab = tabs[0];
-    if (!tab || !/youtube\.com/.test(tab.url || "")) {
+    currentTabId = tab ? tab.id : null;
+    currentTabIsYouTube = !!(tab && /youtube\.com/.test(tab.url || ""));
+    refreshBridge();
+    if (!currentTabIsYouTube) {
       titleEl.textContent = "No YouTube tab active";
       metaEl.textContent = "Open a YouTube video to use shortcuts.";
       return;
@@ -46,6 +57,55 @@
     if (api.runtime.openOptionsPage) api.runtime.openOptionsPage();
     else api.runtime.sendMessage({ type: "PC_OPEN_OPTIONS" });
     window.close();
+  });
+
+  function refreshBridge() {
+    api.runtime.sendMessage({ type: "PC_GET_BRIDGE_STATE" }).then((res) => {
+      if (!res || !res.bridge || !res.bridge.enabled) {
+        bridgeEl.classList.add("hidden");
+        return;
+      }
+      bridgeEl.classList.remove("hidden");
+      const st = res.bridge;
+      if (st.connected) {
+        bridgeStatusEl.textContent = "\u25CF local app connected";
+        bridgeStatusEl.className = "bridge-status ok";
+      } else {
+        bridgeStatusEl.textContent = "\u25CB waiting for local app\u2026";
+        bridgeStatusEl.className = "bridge-status wait";
+      }
+
+      const pinned = res.pinnedTabId;
+      if (pinned != null && pinned === currentTabId) {
+        pinStateEl.textContent = "This tab is the control target";
+        pinBtn.textContent = "Unpin";
+        pinBtn.dataset.mode = "unpin";
+        pinRowEl.classList.remove("hidden");
+      } else if (pinned != null) {
+        pinStateEl.textContent = "Another tab is pinned";
+        pinBtn.textContent = currentTabIsYouTube ? "Pin this tab" : "Clear pin";
+        pinBtn.dataset.mode = currentTabIsYouTube ? "pin" : "unpin";
+        pinRowEl.classList.remove("hidden");
+      } else if (currentTabIsYouTube) {
+        pinStateEl.textContent = "Targets last-used YouTube tab";
+        pinBtn.textContent = "Pin this tab";
+        pinBtn.dataset.mode = "pin";
+        pinRowEl.classList.remove("hidden");
+      } else {
+        pinRowEl.classList.add("hidden");
+      }
+    }).catch(() => {
+      bridgeEl.classList.add("hidden");
+    });
+  }
+
+  pinBtn.addEventListener("click", () => {
+    const mode = pinBtn.dataset.mode;
+    if (mode === "pin" && currentTabId != null) {
+      api.runtime.sendMessage({ type: "PC_SET_PIN", tabId: currentTabId }).then(refreshBridge);
+    } else {
+      api.runtime.sendMessage({ type: "PC_CLEAR_PIN" }).then(refreshBridge);
+    }
   });
 
   window.PC_STORE.getSettings().then((s) => {

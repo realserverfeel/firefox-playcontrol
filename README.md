@@ -67,8 +67,27 @@ npx web-ext lint           # validates the extension
 npx web-ext build          # produces a distributable .zip in web-ext-artifacts/
 ```
 
-## Roadmap (Phase 2)
+## Global hotkeys (optional local app)
 
-Global hotkeys that work outside the browser (control a chosen YouTube tab from
-anywhere in Windows) via a small local app that registers system hotkeys and
-relays commands to the extension over a local WebSocket. Not yet implemented.
+You can control a chosen YouTube tab **from anywhere in Windows** — even when
+another window is focused — using the optional companion app in
+[`local-app/`](local-app/). It registers system-wide hotkeys and relays them to
+this extension over a loopback WebSocket, showing PotPlayer-style overlay
+feedback in a screen corner.
+
+This is a pure add-on and **does not change anything** about the in-page
+shortcuts: with the app not running, the extension behaves exactly as before.
+The extension is the WebSocket *client* — it only ever *tries* to connect to
+`127.0.0.1` and silently retries, never blocking or erroring when the app is
+absent.
+
+To use it:
+
+1. Settings → *Global hotkeys (optional local app)* → enable the connection and
+   set the port (default `8423`).
+2. Run `PlayControlAgent.exe` (see [`local-app/README.md`](local-app/README.md)
+   for configuration, hotkey syntax, and how to build it).
+3. The popup and settings page show "local app connected".
+
+**Target tab:** a tab you pinned from the popup ("Pin this tab"), otherwise the
+most recently used YouTube tab.

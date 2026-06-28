@@ -342,12 +342,27 @@
     );
   }
 
+  // Tell the background which YouTube tab is being used, so global hotkeys
+  // (via the optional local app) target the right tab. Best-effort, throttled.
+  let lastActivityPing = 0;
+  function reportActivity() {
+    const now = Date.now();
+    if (now - lastActivityPing < 1000) return;
+    lastActivityPing = now;
+    try {
+      api.runtime.sendMessage({ type: "PC_ACTIVITY" });
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
   function onKeyDown(e) {
     if (isTypingTarget(e.target)) return;
     const action = KEYS.matchAction(e, settings.shortcuts);
     if (!action) return;
     e.preventDefault();
     e.stopPropagation();
+    reportActivity();
     runAction(action);
   }
 
@@ -368,6 +383,7 @@
     if (v && !v.__pcBound) {
       v.__pcBound = true;
       v.addEventListener("timeupdate", onTimeUpdate);
+      v.addEventListener("play", reportActivity);
     }
   }
 

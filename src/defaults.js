@@ -57,6 +57,14 @@
     // bar (best-effort synthetic mousemove on the player). Off keeps the
     // minimal, no-touch footprint.
     activateNativeControls: false,
+    // Optional bridge to a local companion app that registers system-wide
+    // global hotkeys and forwards them over a loopback WebSocket. The
+    // extension works fully without it; when enabled it merely *tries* to
+    // connect and silently retries. See README "Global hotkeys".
+    globalHotkeys: {
+      enabled: false,
+      port: 8423,
+    },
     osd: {
       enabled: true,
       fontSize: 24,

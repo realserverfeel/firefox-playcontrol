@@ -1,0 +1,16 @@
+{
+  "Port": 8423,
+  "ShowOverlay": true,
+  "OverlayFontSize": 22,
+  "OverlayColor": "#3b9dff",
+  "OverlayCorner": "top-right",
+  "OverlayDurationMs": 1500,
+  "Hotkeys": {
+    "Ctrl+Alt+Home": "togglePlay",
+    "Ctrl+Alt+Left": "seekBack",
+    "Ctrl+Alt+Right": "seekForward",
+    "Ctrl+Alt+Up": "prevBookmark",
+    "Ctrl+Alt+Down": "nextBookmark",
+    "Ctrl+Alt+End": "markBookmark"
+  }
+}

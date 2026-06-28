@@ -41,6 +41,23 @@
     </section>
 
     <section class="card">
+      <h2>Global hotkeys (optional local app)</h2>
+      <p class="desc">The extension works fully on its own; shortcuts above act on the focused YouTube tab. To control playback while <em>other</em> windows are focused, run the companion app (see <strong>local-app/</strong> in the repo). It registers system-wide hotkeys and forwards them to the extension over a loopback connection. Hotkey mappings are configured in the app itself.</p>
+      <label class="row">
+        <span>Enable connection to local app</span>
+        <input type="checkbox" id="ghEnabled" />
+      </label>
+      <label class="row">
+        <span>Port (must match the app)</span>
+        <input type="number" id="ghPort" min="1" max="65535" step="1" />
+      </label>
+      <div class="row">
+        <span>Status</span>
+        <span id="ghStatus" class="gh-status">&mdash;</span>
+      </div>
+    </section>
+
+    <section class="card">
       <h2>On-screen display (OSD)</h2>
       <label class="row">
         <span>Show OSD text</span>

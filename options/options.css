@@ -152,3 +152,7 @@ input[type="color"] {
   pointer-events: none;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.gh-status { font-size: 13px; color: var(--muted); }
+.gh-status.ok { color: #5ad17a; }
+.gh-status.wait { color: #d1b35a; }
