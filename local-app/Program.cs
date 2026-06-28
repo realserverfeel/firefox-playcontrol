@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.Drawing;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Win32;
 
@@ -27,10 +30,21 @@ public class TrayAppContext : ApplicationContext
     readonly NotifyIcon _tray;
     readonly HotkeyManager _hotkeys;
     readonly OverlayForm _overlay;
+    readonly Icon _appIcon;
     WsServer _server;
-    readonly SynchronizationContext _ui;
     bool _connected;
     bool _enabled = true;
+
+    // Shortcut map (action -> [combos]) synced from the extension. Cached to
+    // disk so the same global hotkeys are registered on startup, before the
+    // browser connects.
+    Dictionary<string, List<string>> _shortcuts;
+
+    [DllImport("user32.dll")]
+    static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
 
     static readonly Dictionary<string, string> ActionLabels = new()
     {
@@ -47,22 +61,25 @@ public class TrayAppContext : ApplicationContext
 
     public TrayAppContext()
     {
-        _ui = SynchronizationContext.Current ?? new SynchronizationContext();
         _cfg = AppConfig.Load();
+        _shortcuts = AppConfig.LoadSyncedShortcuts();
+        _appIcon = LoadAppIcon();
 
         _overlay = new OverlayForm(_cfg);
-        // Force handle creation so the first Flash is instant.
+        // Force handle creation so the first Flash is instant and so we have a
+        // UI-thread control to marshal callbacks onto.
         _ = _overlay.Handle;
 
         _hotkeys = new HotkeyManager();
-        _hotkeys.HotkeyPressed += OnHotkey;
+        _hotkeys.HotkeyPressed += OnHotkey;        // raised on the UI thread (WM_HOTKEY)
+        _hotkeys.ToggleRequested += ToggleEnabled; // raised on the UI thread (WM_HOTKEY)
 
         _server = new WsServer(_cfg.Port);
         WireServer(_server);
 
         _tray = new NotifyIcon
         {
-            Icon = SystemIcons.Application,
+            Icon = _appIcon,
             Visible = true,
             Text = "PlayControl Agent",
         };
@@ -72,18 +89,40 @@ public class TrayAppContext : ApplicationContext
         StartServices();
     }
 
+    // Marshal a callback onto the UI thread. Server events fire on thread-pool
+    // threads (async read loops); WinForms timers and Show() must run on the
+    // thread that owns the message loop, so we route through the overlay's
+    // handle. This replaces the previously-captured SynchronizationContext,
+    // which was grabbed before any control existed and therefore posted to the
+    // thread pool (the cause of the overlay never auto-hiding).
+    void Post(Action action)
+    {
+        try
+        {
+            if (_overlay.IsHandleCreated)
+                _overlay.BeginInvoke(action);
+            else
+                action();
+        }
+        catch
+        {
+            // overlay disposed mid-shutdown; ignore
+        }
+    }
+
     void WireServer(WsServer server)
     {
-        server.ConnectionChanged += conn => _ui.Post(_ =>
+        server.ConnectionChanged += conn => Post(() =>
         {
             _connected = conn;
             UpdateTrayText();
-        }, null);
-        server.ResultReceived += text => _ui.Post(_ => OnResult(text), null);
-        server.ServerError += msg => _ui.Post(_ =>
+        });
+        server.ResultReceived += text => Post(() => OnResult(text));
+        server.ShortcutsReceived += map => Post(() => OnShortcutsReceived(map));
+        server.ServerError += msg => Post(() =>
         {
             _tray.ShowBalloonTip(4000, "PlayControl Agent", msg, ToolTipIcon.Warning);
-        }, null);
+        });
     }
 
     // ---- lifecycle ---------------------------------------------------------
@@ -91,9 +130,10 @@ public class TrayAppContext : ApplicationContext
     void StartServices()
     {
         _server.Start();
+        _hotkeys.RegisterToggle(_cfg.ToggleHotkey);
         if (_enabled)
         {
-            _hotkeys.RegisterAll(_cfg.Hotkeys);
+            _hotkeys.RegisterShortcuts(_shortcuts);
             ReportHotkeyErrors();
         }
         UpdateTrayText();
@@ -122,13 +162,27 @@ public class TrayAppContext : ApplicationContext
         WireServer(_server);
         _server.Start();
 
+        _hotkeys.RegisterToggle(_cfg.ToggleHotkey);
         if (_enabled)
         {
-            _hotkeys.RegisterAll(_cfg.Hotkeys);
+            _hotkeys.RegisterShortcuts(_shortcuts);
             ReportHotkeyErrors();
         }
         UpdateTrayText();
         _tray.ShowBalloonTip(2500, "PlayControl Agent", "Configuration reloaded.", ToolTipIcon.Info);
+    }
+
+    // Shortcuts pushed from the extension: cache them and (re)register globally.
+    void OnShortcutsReceived(Dictionary<string, List<string>> map)
+    {
+        _shortcuts = map;
+        AppConfig.SaveSyncedShortcuts(map);
+        if (_enabled)
+        {
+            _hotkeys.RegisterShortcuts(_shortcuts);
+            ReportHotkeyErrors();
+        }
+        UpdateTrayText();
     }
 
     void ToggleEnabled()
@@ -136,12 +190,14 @@ public class TrayAppContext : ApplicationContext
         _enabled = !_enabled;
         if (_enabled)
         {
-            _hotkeys.RegisterAll(_cfg.Hotkeys);
+            _hotkeys.RegisterShortcuts(_shortcuts);
             ReportHotkeyErrors();
+            _overlay.Flash("PlayControl \u2014 hotkeys ON");
         }
         else
         {
-            _hotkeys.UnregisterAll();
+            _hotkeys.UnregisterActions();
+            _overlay.Flash("PlayControl \u2014 hotkeys OFF");
         }
         BuildMenu();
         UpdateTrayText();
@@ -151,15 +207,24 @@ public class TrayAppContext : ApplicationContext
 
     void OnHotkey(string action)
     {
-        _ui.Post(_ =>
+        // When connected, wait for the extension's result so the overlay shows
+        // the real player state (and is suppressed if the browser is focused).
+        // When not connected, give immediate local feedback.
+        if (!_connected)
         {
             var label = ActionLabels.TryGetValue(action, out var l) ? l : action;
-            if (!_connected)
-                _overlay.Flash(label + "  \u2014 browser not connected");
-            else
-                _overlay.Flash(label);
-        }, null);
+            _overlay.Flash(label + "  \u2014 browser not connected");
+        }
         _ = _server.SendCommand(action);
+    }
+
+    // Skip the local overlay when the browser is the foreground window: the
+    // in-page OSD already shows feedback there, so avoid a duplicate.
+    void MaybeFlash(string text)
+    {
+        if (_cfg.SuppressOverlayWhenBrowserFocused && IsBrowserForeground())
+            return;
+        _overlay.Flash(text);
     }
 
     void OnResult(string text)
@@ -187,7 +252,7 @@ public class TrayAppContext : ApplicationContext
                     "tab-unreachable" => "reload the YouTube tab",
                     _ => "no YouTube tab",
                 };
-                _overlay.Flash($"{label}  \u2014 {msg}");
+                MaybeFlash($"{label}  \u2014 {msg}");
                 return;
             }
 
@@ -199,11 +264,31 @@ public class TrayAppContext : ApplicationContext
             {
                 suffix = "  " + FormatTime(ct.GetDouble());
             }
-            _overlay.Flash(label + suffix);
+            MaybeFlash(label + suffix);
         }
         catch
         {
             // ignore malformed result messages
+        }
+    }
+
+    static bool IsBrowserForeground()
+    {
+        try
+        {
+            var h = GetForegroundWindow();
+            if (h == IntPtr.Zero) return false;
+            GetWindowThreadProcessId(h, out uint pid);
+            if (pid == 0) return false;
+            using var p = Process.GetProcessById((int)pid);
+            var name = p.ProcessName.ToLowerInvariant();
+            return name.Contains("firefox") || name.Contains("chrome") ||
+                   name.Contains("msedge") || name.Contains("librewolf") ||
+                   name.Contains("waterfox") || name.Contains("floorp");
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -214,6 +299,26 @@ public class TrayAppContext : ApplicationContext
         return ts.TotalHours >= 1
             ? $"{(int)ts.TotalHours}:{ts.Minutes:D2}:{ts.Seconds:D2}"
             : $"{ts.Minutes}:{ts.Seconds:D2}";
+    }
+
+    static Icon LoadAppIcon()
+    {
+        try
+        {
+            var asm = Assembly.GetExecutingAssembly();
+            var name = Array.Find(asm.GetManifestResourceNames(),
+                n => n.EndsWith("app.ico", StringComparison.OrdinalIgnoreCase));
+            if (name != null)
+            {
+                using var s = asm.GetManifestResourceStream(name);
+                if (s != null) return new Icon(s);
+            }
+        }
+        catch
+        {
+            // fall through
+        }
+        return SystemIcons.Application;
     }
 
     // ---- tray menu ---------------------------------------------------------
@@ -256,11 +361,22 @@ public class TrayAppContext : ApplicationContext
             : _connected
                 ? "Browser extension is connected."
                 : "Enabled \u2014 waiting for the browser extension to connect.";
-        string keys = _cfg.Hotkeys.Count == 0
-            ? "No hotkeys configured."
-            : string.Join("\n", _cfg.Hotkeys.Select(kv => $"  {kv.Key}  \u2192  {kv.Value}"));
+
+        var lines = _shortcuts
+            .Where(kv => kv.Value != null && kv.Value.Any(c => !string.IsNullOrWhiteSpace(c)))
+            .Select(kv =>
+            {
+                var label = ActionLabels.TryGetValue(kv.Key, out var l) ? l : kv.Key;
+                return $"  {label}  \u2192  {string.Join(", ", kv.Value.Where(c => !string.IsNullOrWhiteSpace(c)))}";
+            })
+            .ToList();
+        string keys = lines.Count == 0
+            ? "No hotkeys synced yet (configure them in the extension and connect)."
+            : string.Join("\n", lines);
+
         MessageBox.Show(
-            $"{state}\n\nPort: {_cfg.Port}\n\nHotkeys:\n{keys}\n\nConfig file:\n{AppConfig.ConfigPath}",
+            $"{state}\n\nPort: {_cfg.Port}\nMaster toggle: {_cfg.ToggleHotkey}\n\n" +
+            $"Global hotkeys (synced from the extension):\n{keys}\n\nConfig file:\n{AppConfig.ConfigPath}",
             "PlayControl Agent",
             MessageBoxButtons.OK,
             MessageBoxIcon.Information);

@@ -19,9 +19,25 @@
   const MAX_BACKOFF = 15000;
 
   let onCommand = null; // (action) => Promise<{ok, info}>
+  let shortcutsProvider = null; // () => Promise<map> | map ; current shortcuts
 
   function url() {
     return "ws://127.0.0.1:" + port + "/";
+  }
+
+  // Push the current shortcut map to the app so it can register the same keys
+  // as system-wide global hotkeys. Best-effort; ignored if disconnected.
+  async function pushShortcuts() {
+    if (!shortcutsProvider) return;
+    let map = null;
+    try {
+      map = await shortcutsProvider();
+    } catch (e) {
+      return;
+    }
+    if (map && typeof map === "object") {
+      safeSend({ type: "shortcuts", shortcuts: map });
+    }
   }
 
   function scheduleReconnect() {
@@ -47,6 +63,7 @@
       connected = true;
       backoff = 1000;
       safeSend({ type: "hello", app: "PlayControl-ext" });
+      pushShortcuts();
     };
     sock.onmessage = function (ev) {
       if (ws !== sock) return;
@@ -153,5 +170,11 @@
     setCommandHandler: function (cb) {
       onCommand = cb;
     },
+    // Provider returning the current shortcut map; called on each (re)connect.
+    setShortcutsProvider: function (cb) {
+      shortcutsProvider = cb;
+    },
+    // Push the latest shortcuts now (e.g. after a settings change).
+    pushShortcuts: pushShortcuts,
   };
 })();

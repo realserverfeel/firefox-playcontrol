@@ -20,10 +20,22 @@ This lets you control YouTube playback **while another window is focused**
 ```
 
 - The **app** is the WebSocket *server*; the **extension** is the *client*.
+- **Hotkeys are configured once, in the extension.** On connect (and whenever
+  you change them) the extension pushes its shortcut map
+  (`{type:"shortcuts", shortcuts:{action:[combos]}}`) to the app, which then
+  registers those exact keys as **system-wide global hotkeys** (PotPlayer
+  style) — including bare keys like `Home`/`End`. The map is cached to
+  `shortcuts.json` so the keys are re-registered on startup, before the
+  browser connects.
 - When a hotkey fires, the app sends `{type:"command", id, action}` to the
   extension; the extension runs the action on the target tab and replies with
   `{type:"result", id, action, ok, info}` so the app can show accurate overlay
   feedback.
+- A **master toggle hotkey** (default `Ctrl+Alt+P`) enables/disables all the
+  global hotkeys at once, so you can momentarily hand the keys back to other
+  apps. It stays registered while the app runs.
+- While the browser is the foreground window the app suppresses its own corner
+  overlay (the in-page OSD already shows feedback there).
 - Only WebSocket upgrades whose `Origin` is `moz-extension://…` (or
   `chrome-extension://…`) are accepted, and the listener binds to `127.0.0.1`
   only.
@@ -47,7 +59,8 @@ The extension decides which YouTube tab to control:
 
 ## Tray menu
 
-- **Enable / Disable hotkeys** — toggle global hotkeys without quitting.
+- **Enable / Disable hotkeys** — toggle global hotkeys without quitting (same
+  as pressing the master toggle hotkey, default `Ctrl+Alt+P`).
 - **Edit configuration…** — opens `config.json` (next to the exe) in your
   editor. Change hotkeys, port, overlay style.
 - **Reload configuration** — re-reads `config.json` and re-registers hotkeys
@@ -69,27 +82,28 @@ See `config.example.json`. Keys:
 | `OverlayColor` | Overlay text color (hex). |
 | `OverlayCorner` | `top-right` \| `top-left` \| `bottom-right` \| `bottom-left`. |
 | `OverlayDurationMs` | How long the overlay stays visible. |
-| `Hotkeys` | Map of `"combo"` → `action`. |
+| `ToggleHotkey` | Master enable/disable combo (default `Ctrl+Alt+P`). |
+| `SuppressOverlayWhenBrowserFocused` | Hide the corner overlay while the browser is focused (default `true`). |
 
-**Combo syntax:** modifiers `Ctrl` / `Alt` / `Shift` / `Win` joined with `+`,
-plus one key. Key names include arrows (`Left`/`Right`/`Up`/`Down`), `Home`,
-`End`, `PageUp`/`PgUp`, `PageDown`/`PgDn`, `Insert`, `Delete`, `Space`, `Enter`,
-`F1`–`F24`, `Numpad0`–`Numpad9`, digits `0`–`9`, and letters `A`–`Z`.
+> **Hotkeys themselves are no longer configured here** — set them in the
+> extension's Settings page. The app registers whatever the extension syncs.
+> (Old `config.json` files with a `Hotkeys` block still parse; that block is
+> just ignored.)
 
-**Actions** (must match the extension):
-`togglePlay`, `seekBack`, `seekForward`, `markBookmark`, `prevBookmark`,
-`nextBookmark`, `playSegment`, `copyUrl`, `clearBookmarks`.
+**Combo syntax** (used by the extension, understood by the app): modifiers
+`Ctrl` / `Alt` / `Shift` / `Win` joined with `+`, plus one key. Key names use
+`KeyboardEvent.code` values — `Home`, `End`, `PageUp`, `PageDown`, `Insert`,
+`Delete`, `ArrowLeft`/`ArrowRight`/`ArrowUp`/`ArrowDown`, `KeyA`–`KeyZ`,
+`Digit0`–`Digit9`, `Numpad0`–`Numpad9`, `F1`–`F24` — and common aliases
+(`Left`, `PgUp`, single letters/digits) are also accepted.
 
-Example:
+Example (just the master toggle and overlay style):
 
 ```json
 {
   "Port": 8423,
-  "Hotkeys": {
-    "Ctrl+Alt+Home": "togglePlay",
-    "Ctrl+Alt+Right": "seekForward",
-    "Ctrl+Alt+Left": "seekBack"
-  }
+  "ToggleHotkey": "Ctrl+Alt+P",
+  "OverlayCorner": "top-right"
 }
 ```
 
@@ -117,6 +131,11 @@ dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile
 - Some **exclusive-fullscreen games** capture all input and may swallow global
   hotkeys.
 - If a hotkey "could not be registered", another app already owns that
-  combination — pick a different one in `config.json`.
+  combination — change it in the extension's Settings, or press the master
+  toggle to release the keys.
+- Because bare keys (`Home`/`End`/`Delete`/`PageUp`/`PageDown`) are registered
+  globally, they are intercepted everywhere while hotkeys are enabled. Press
+  the master toggle (`Ctrl+Alt+P`) or *Disable hotkeys* to use them normally
+  in other apps.
 - The exe is unsigned; SmartScreen may warn on first run ("More info" → "Run
   anyway").

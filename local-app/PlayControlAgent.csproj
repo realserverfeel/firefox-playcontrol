@@ -11,12 +11,19 @@
     <RootNamespace>PlayControlAgent</RootNamespace>
     <!-- Allows building this Windows-only app from non-Windows hosts (CI). -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
     <Product>PlayControl Agent</Product>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Embedded so the tray NotifyIcon can load it at runtime, and set as the
+         executable's icon via ApplicationIcon above. -->
+    <EmbeddedResource Include="app.ico" />
+  </ItemGroup>
 
 </Project>

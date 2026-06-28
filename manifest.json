@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "PlayControl",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Keyboard-driven YouTube playback control: seek, play/pause, bookmarks, segment replay, and a bookmark manager. Minimal page footprint, PotPlayer-style on-screen text.",
   "icons": {
     "48": "icons/icon48.png",
@@ -24,7 +24,7 @@
     "ws://127.0.0.1/*"
   ],
   "background": {
-    "scripts": ["src/defaults.js", "src/storage.js", "src/bridge.js", "src/background.js"]
+    "scripts": ["src/defaults.js", "src/storage.js", "src/shortcuts.js", "src/bridge.js", "src/background.js"]
   },
   "content_scripts": [
     {

@@ -12,9 +12,16 @@ public class AppConfig
     // top-right | top-left | bottom-right | bottom-left
     public string OverlayCorner { get; set; } = "top-right";
     public int OverlayDurationMs { get; set; } = 1500;
-    // Hotkey combo (e.g. "Ctrl+Alt+Right") -> action name understood by the
-    // extension (togglePlay, seekBack, seekForward, markBookmark, prevBookmark,
-    // nextBookmark, playSegment, copyUrl, clearBookmarks).
+    // Master toggle hotkey: enables/disables all the global playback hotkeys at
+    // once (like PotPlayer). Stays registered while the app runs so you can
+    // re-enable it. Same combo format as the extension.
+    public string ToggleHotkey { get; set; } = "Ctrl+Alt+P";
+    // When true, suppress the local corner overlay while the browser is the
+    // foreground window (the in-page OSD already gives feedback there).
+    public bool SuppressOverlayWhenBrowserFocused { get; set; } = true;
+    // Legacy: hotkeys are now configured in the extension and synced over the
+    // WebSocket; this field is ignored for registration and kept only so old
+    // config.json files still parse.
     public Dictionary<string, string> Hotkeys { get; set; } = new();
 
     static readonly JsonSerializerOptions Opts = new()
@@ -25,20 +32,46 @@ public class AppConfig
 
     public static string ConfigPath => Path.Combine(AppContext.BaseDirectory, "config.json");
 
+    // Where the shortcut map synced from the extension is cached, so global
+    // hotkeys can be registered on startup before the browser connects.
+    public static string ShortcutsCachePath =>
+        Path.Combine(AppContext.BaseDirectory, "shortcuts.json");
+
+    public static Dictionary<string, List<string>> LoadSyncedShortcuts()
+    {
+        try
+        {
+            if (File.Exists(ShortcutsCachePath))
+            {
+                var json = File.ReadAllText(ShortcutsCachePath);
+                var map = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(json, Opts);
+                if (map != null) return map;
+            }
+        }
+        catch
+        {
+            // ignore: treat as no cached shortcuts
+        }
+        return new Dictionary<string, List<string>>();
+    }
+
+    public static void SaveSyncedShortcuts(Dictionary<string, List<string>> map)
+    {
+        try
+        {
+            File.WriteAllText(ShortcutsCachePath, JsonSerializer.Serialize(map, Opts));
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
     public static AppConfig Default()
     {
         return new AppConfig
         {
             Port = 8423,
-            Hotkeys = new Dictionary<string, string>
-            {
-                ["Ctrl+Alt+Home"] = "togglePlay",
-                ["Ctrl+Alt+Left"] = "seekBack",
-                ["Ctrl+Alt+Right"] = "seekForward",
-                ["Ctrl+Alt+Up"] = "prevBookmark",
-                ["Ctrl+Alt+Down"] = "nextBookmark",
-                ["Ctrl+Alt+End"] = "markBookmark",
-            },
         };
     }
 
@@ -53,6 +86,7 @@ public class AppConfig
                 if (cfg != null)
                 {
                     cfg.Hotkeys ??= new Dictionary<string, string>();
+                    if (string.IsNullOrWhiteSpace(cfg.ToggleHotkey)) cfg.ToggleHotkey = "Ctrl+Alt+P";
                     if (cfg.Port <= 0 || cfg.Port > 65535) cfg.Port = 8423;
                     return cfg;
                 }

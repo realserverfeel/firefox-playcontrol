@@ -5,9 +5,15 @@ namespace PlayControlAgent;
 // Registers system-wide hotkeys via the Win32 RegisterHotKey API and raises an
 // event (carrying the mapped action name) when one is pressed. Uses a hidden
 // message-only window to receive WM_HOTKEY.
+//
+// Combos use the same string format the extension produces from
+// KeyboardEvent.code, e.g. "Home", "Shift+End", "Ctrl+Alt+ArrowRight",
+// "Ctrl+Alt+KeyB". A separate "toggle" hotkey enables/disables all the others
+// and is registered independently so it survives a disable.
 public class HotkeyManager : NativeWindow, IDisposable
 {
     const int WM_HOTKEY = 0x0312;
+    const int ToggleId = 9000;
 
     [DllImport("user32.dll", SetLastError = true)]
     static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -20,8 +26,10 @@ public class HotkeyManager : NativeWindow, IDisposable
 
     readonly Dictionary<int, string> _idToAction = new();
     int _nextId = 1;
+    bool _toggleRegistered;
 
     public event Action<string>? HotkeyPressed;
+    public event Action? ToggleRequested;
     public List<string> Errors { get; } = new();
 
     public HotkeyManager()
@@ -29,27 +37,33 @@ public class HotkeyManager : NativeWindow, IDisposable
         CreateHandle(new CreateParams());
     }
 
-    public void RegisterAll(Dictionary<string, string> hotkeys)
+    // Register every combo of an action -> [combos] map as a global hotkey.
+    public void RegisterShortcuts(Dictionary<string, List<string>> map)
     {
-        UnregisterAll();
+        UnregisterActions();
         Errors.Clear();
-        foreach (var kv in hotkeys)
+        foreach (var kv in map)
         {
-            if (string.IsNullOrWhiteSpace(kv.Value)) continue;
-            if (!TryParse(kv.Key, out uint mods, out uint vk))
+            var action = kv.Key;
+            if (kv.Value == null) continue;
+            foreach (var combo in kv.Value)
             {
-                Errors.Add($"Unrecognized hotkey: \"{kv.Key}\"");
-                continue;
+                if (string.IsNullOrWhiteSpace(combo)) continue;
+                if (!TryParse(combo, out uint mods, out uint vk))
+                {
+                    Errors.Add($"Unrecognized hotkey: \"{combo}\"");
+                    continue;
+                }
+                int id = _nextId++;
+                if (RegisterHotKey(Handle, id, mods | (uint)Mods.NoRepeat, vk))
+                    _idToAction[id] = action;
+                else
+                    Errors.Add($"Could not register \"{combo}\" (already in use by another app?)");
             }
-            int id = _nextId++;
-            if (RegisterHotKey(Handle, id, mods | (uint)Mods.NoRepeat, vk))
-                _idToAction[id] = kv.Value;
-            else
-                Errors.Add($"Could not register \"{kv.Key}\" (already in use by another app?)");
         }
     }
 
-    public void UnregisterAll()
+    public void UnregisterActions()
     {
         foreach (var id in _idToAction.Keys)
             UnregisterHotKey(Handle, id);
@@ -57,12 +71,43 @@ public class HotkeyManager : NativeWindow, IDisposable
         _nextId = 1;
     }
 
+    // Register/replace the master toggle hotkey. Returns false if it could not
+    // be parsed or registered.
+    public bool RegisterToggle(string combo)
+    {
+        UnregisterToggle();
+        if (string.IsNullOrWhiteSpace(combo)) return false;
+        if (!TryParse(combo, out uint mods, out uint vk))
+        {
+            Errors.Add($"Unrecognized toggle hotkey: \"{combo}\"");
+            return false;
+        }
+        if (RegisterHotKey(Handle, ToggleId, mods | (uint)Mods.NoRepeat, vk))
+        {
+            _toggleRegistered = true;
+            return true;
+        }
+        Errors.Add($"Could not register toggle \"{combo}\" (already in use?)");
+        return false;
+    }
+
+    public void UnregisterToggle()
+    {
+        if (_toggleRegistered)
+        {
+            UnregisterHotKey(Handle, ToggleId);
+            _toggleRegistered = false;
+        }
+    }
+
     protected override void WndProc(ref Message m)
     {
         if (m.Msg == WM_HOTKEY)
         {
             int id = m.WParam.ToInt32();
-            if (_idToAction.TryGetValue(id, out var action))
+            if (id == ToggleId)
+                ToggleRequested?.Invoke();
+            else if (_idToAction.TryGetValue(id, out var action))
                 HotkeyPressed?.Invoke(action);
         }
         base.WndProc(ref m);
@@ -106,8 +151,14 @@ public class HotkeyManager : NativeWindow, IDisposable
         return TryKey(keyTok, out vk);
     }
 
+    // Accepts both KeyboardEvent.code names (Home, ArrowRight, KeyB, Digit1,
+    // Numpad4, PageUp, …) and friendlier aliases (right, pgup, …).
     static readonly Dictionary<string, Keys> NamedKeys = new(StringComparer.OrdinalIgnoreCase)
     {
+        ["arrowleft"] = Keys.Left,
+        ["arrowright"] = Keys.Right,
+        ["arrowup"] = Keys.Up,
+        ["arrowdown"] = Keys.Down,
         ["left"] = Keys.Left,
         ["right"] = Keys.Right,
         ["up"] = Keys.Up,
@@ -125,6 +176,7 @@ public class HotkeyManager : NativeWindow, IDisposable
         ["space"] = Keys.Space,
         ["spacebar"] = Keys.Space,
         ["enter"] = Keys.Enter,
+        ["numpadenter"] = Keys.Enter,
         ["return"] = Keys.Enter,
         ["tab"] = Keys.Tab,
         ["escape"] = Keys.Escape,
@@ -132,6 +184,17 @@ public class HotkeyManager : NativeWindow, IDisposable
         ["backspace"] = Keys.Back,
         ["pause"] = Keys.Pause,
         ["break"] = Keys.Pause,
+        ["minus"] = Keys.OemMinus,
+        ["equal"] = Keys.Oemplus,
+        ["bracketleft"] = Keys.OemOpenBrackets,
+        ["bracketright"] = Keys.OemCloseBrackets,
+        ["backslash"] = Keys.OemBackslash,
+        ["semicolon"] = Keys.OemSemicolon,
+        ["quote"] = Keys.OemQuotes,
+        ["backquote"] = Keys.Oemtilde,
+        ["comma"] = Keys.Oemcomma,
+        ["period"] = Keys.OemPeriod,
+        ["slash"] = Keys.OemQuestion,
     };
 
     static bool TryKey(string k, out uint vk)
@@ -144,6 +207,18 @@ public class HotkeyManager : NativeWindow, IDisposable
         if (NamedKeys.TryGetValue(n, out var named))
         {
             vk = (uint)named;
+            return true;
+        }
+        // KeyboardEvent.code letter form: "KeyB" -> B
+        if (n.Length == 4 && n.StartsWith("key") && n[3] >= 'a' && n[3] <= 'z')
+        {
+            vk = (uint)(Keys.A + (n[3] - 'a'));
+            return true;
+        }
+        // KeyboardEvent.code digit form: "Digit1" -> 1
+        if (n.Length == 6 && n.StartsWith("digit") && n[5] >= '0' && n[5] <= '9')
+        {
+            vk = (uint)(Keys.D0 + (n[5] - '0'));
             return true;
         }
         // F1..F24
@@ -181,7 +256,8 @@ public class HotkeyManager : NativeWindow, IDisposable
 
     public void Dispose()
     {
-        UnregisterAll();
+        UnregisterActions();
+        UnregisterToggle();
         DestroyHandle();
         GC.SuppressFinalize(this);
     }

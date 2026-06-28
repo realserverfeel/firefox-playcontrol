@@ -84,8 +84,22 @@
 
   // ---- bridge lifecycle --------------------------------------------------
 
+  // The local app registers the *same* shortcuts the user configured in the
+  // extension as system-wide global hotkeys. We push the current map on every
+  // (re)connect and whenever settings change.
+  async function getShortcutMap() {
+    try {
+      const s = await STORE.getSettings();
+      const sc = (s && s.shortcuts) || {};
+      return window.PC_KEYS ? window.PC_KEYS.normalizeShortcuts(sc) : sc;
+    } catch (e) {
+      return {};
+    }
+  }
+
   if (BRIDGE) {
     BRIDGE.setCommandHandler(routeCommand);
+    BRIDGE.setShortcutsProvider(getShortcutMap);
   }
 
   async function applyBridgeSettings() {
@@ -100,6 +114,8 @@
   api.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes[D.STORAGE_KEYS.settings]) {
       applyBridgeSettings();
+      // Re-push shortcuts so the app re-registers global hotkeys live.
+      if (BRIDGE) BRIDGE.pushShortcuts();
     }
   });
 

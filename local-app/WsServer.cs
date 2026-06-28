@@ -21,6 +21,7 @@ public class WsServer
 
     public event Action<bool>? ConnectionChanged;
     public event Action<string>? ResultReceived;
+    public event Action<Dictionary<string, List<string>>>? ShortcutsReceived;
     public event Action<string>? ServerError;
 
     public bool ClientConnected => _client is { State: WebSocketState.Open };
@@ -110,7 +111,7 @@ public class WsServer
                 if (res.MessageType == WebSocketMessageType.Close)
                     break;
                 var text = Encoding.UTF8.GetString(buf, 0, res.Count);
-                ResultReceived?.Invoke(text);
+                Dispatch(text);
             }
         }
         catch
@@ -126,6 +127,34 @@ public class WsServer
             }
             try { ws.Dispose(); } catch { /* ignore */ }
         }
+    }
+
+    // Route an incoming JSON message by its "type" field.
+    void Dispatch(string text)
+    {
+        string? type = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(text);
+            if (doc.RootElement.TryGetProperty("type", out var t))
+                type = t.GetString();
+            if (type == "shortcuts")
+            {
+                if (doc.RootElement.TryGetProperty("shortcuts", out var sc) &&
+                    sc.ValueKind == JsonValueKind.Object)
+                {
+                    var map = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(sc.GetRawText());
+                    if (map != null) ShortcutsReceived?.Invoke(map);
+                }
+                return;
+            }
+        }
+        catch
+        {
+            // malformed JSON: ignore
+            return;
+        }
+        ResultReceived?.Invoke(text);
     }
 
     public async Task SendCommand(string action)
