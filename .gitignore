@@ -7,5 +7,7 @@ web-ext-artifacts/
 local-app/bin/
 local-app/obj/
 local-app/publish/
-# Runtime config written next to the exe
+local-app/dist/
+# Runtime config and synced hotkeys written next to the exe
 local-app/config.json
+local-app/shortcuts.json
