@@ -33,7 +33,8 @@ bar, or layout.
 - **Native controls**: optional setting to wake YouTube's native player
   controls / seek bar when a shortcut is used (off by default to keep the
   minimal footprint).
-- All shortcuts are remappable in **Settings**.
+- All shortcuts are remappable in **Settings**, and each action can be bound to
+  multiple keys (a key can only belong to one action).
 
 ## Project structure
 

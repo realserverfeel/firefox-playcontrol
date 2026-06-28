@@ -31,17 +31,18 @@
   };
 
   // Default shortcuts use KeyboardEvent.code values (physical keys), so they
-  // are layout-independent. Empty string means "unassigned".
+  // are layout-independent. Each action holds an array of combos; an empty
+  // array means "unassigned". A single action may have multiple bindings.
   const DEFAULT_SHORTCUTS = {
-    togglePlay: "Home",
-    seekBack: "Insert",
-    seekForward: "Delete",
-    markBookmark: "End",
-    prevBookmark: "PageUp",
-    nextBookmark: "PageDown",
-    playSegment: "",
-    copyUrl: "",
-    clearBookmarks: "",
+    togglePlay: ["Home"],
+    seekBack: ["Insert"],
+    seekForward: ["Delete"],
+    markBookmark: ["End"],
+    prevBookmark: ["PageUp"],
+    nextBookmark: ["PageDown"],
+    playSegment: [],
+    copyUrl: [],
+    clearBookmarks: [],
   };
 
   const DEFAULT_SETTINGS = {

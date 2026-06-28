@@ -32,6 +32,11 @@
     await STORE.setSettings(settings);
   }
 
+  function getCombos(action) {
+    const v = settings.shortcuts[action];
+    return Array.isArray(v) ? v : v ? [v] : [];
+  }
+
   function renderShortcuts() {
     els.shortcuts.innerHTML = "";
     for (const action of Object.keys(D.DEFAULT_SHORTCUTS)) {
@@ -42,29 +47,63 @@
       label.className = "sc-label";
       label.textContent = D.ACTION_LABELS[action] || action;
 
-      const key = document.createElement("div");
-      key.className = "sc-key";
-      const combo = settings.shortcuts[action];
-      key.textContent = combo ? KEYS.prettyCombo(combo) : "(unset)";
-      if (!combo) key.classList.add("unset");
-      key.dataset.action = action;
+      const keys = document.createElement("div");
+      keys.className = "sc-keys";
 
-      key.addEventListener("click", () => startRecording(action, key));
+      const combos = getCombos(action);
+      if (combos.length === 0) {
+        const none = document.createElement("span");
+        none.className = "sc-none";
+        none.textContent = "(no keys)";
+        keys.appendChild(none);
+      }
+      for (const combo of combos) {
+        const chip = document.createElement("span");
+        chip.className = "sc-chip";
+
+        const txt = document.createElement("span");
+        txt.textContent = KEYS.prettyCombo(combo);
+        chip.appendChild(txt);
+
+        const rm = document.createElement("button");
+        rm.className = "sc-remove";
+        rm.type = "button";
+        rm.textContent = "\u00D7";
+        rm.title = "Remove";
+        rm.addEventListener("click", () => removeCombo(action, combo));
+        chip.appendChild(rm);
+
+        keys.appendChild(chip);
+      }
+
+      const add = document.createElement("button");
+      add.className = "sc-add";
+      add.type = "button";
+      add.dataset.action = action;
+      if (recordingAction === action) {
+        add.textContent = "Press keys\u2026 (Esc to cancel)";
+        add.classList.add("recording");
+      } else {
+        add.textContent = "+ Add key";
+      }
+      add.addEventListener("click", () => startRecording(action));
+      keys.appendChild(add);
 
       row.appendChild(label);
-      row.appendChild(key);
+      row.appendChild(keys);
       els.shortcuts.appendChild(row);
     }
   }
 
-  function startRecording(action, keyEl) {
-    // Stop any other recording.
-    document.querySelectorAll(".sc-key.recording").forEach((el) => {
-      el.classList.remove("recording");
-    });
-    recordingAction = action;
-    keyEl.classList.add("recording");
-    keyEl.textContent = "Press keys\u2026";
+  function removeCombo(action, combo) {
+    settings.shortcuts[action] = getCombos(action).filter((c) => c !== combo);
+    renderShortcuts();
+    save().then(() => toast("Saved"));
+  }
+
+  function startRecording(action) {
+    recordingAction = recordingAction === action ? null : action;
+    renderShortcuts();
   }
 
   function onKeyDownCapture(e) {
@@ -72,27 +111,23 @@
     e.preventDefault();
     e.stopPropagation();
 
-    const keyEl = document.querySelector(`.sc-key[data-action="${recordingAction}"]`);
-
     if (e.code === "Escape") {
-      settings.shortcuts[recordingAction] = "";
-      finishRecording(keyEl);
+      recordingAction = null;
+      renderShortcuts();
       return;
     }
     const combo = KEYS.comboFromEvent(e);
     if (!combo) return; // lone modifier, keep waiting
 
-    // Prevent duplicate assignment: clear the same combo from other actions.
-    for (const a of Object.keys(settings.shortcuts)) {
-      if (a !== recordingAction && settings.shortcuts[a] === combo) {
-        settings.shortcuts[a] = "";
-      }
-    }
-    settings.shortcuts[recordingAction] = combo;
-    finishRecording(keyEl);
-  }
+    const action = recordingAction;
 
-  function finishRecording() {
+    // No duplicates: remove this combo from every action (including this one),
+    // then add it to the target action.
+    for (const a of Object.keys(settings.shortcuts)) {
+      settings.shortcuts[a] = getCombos(a).filter((c) => c !== combo);
+    }
+    settings.shortcuts[action].push(combo);
+
     recordingAction = null;
     renderShortcuts();
     save().then(() => toast("Shortcut saved"));

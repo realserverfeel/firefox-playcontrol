@@ -82,6 +82,48 @@ input[type="color"] {
 .sc-key.recording { border-color: var(--accent); color: var(--accent); }
 .sc-key.unset { color: var(--muted); }
 
+.sc-keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: 1;
+}
+.sc-none { color: var(--muted); }
+.sc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  background: #161619;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--text);
+}
+.sc-remove {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.sc-remove:hover { color: #ff6b6b; }
+.sc-add {
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--muted);
+  font-family: inherit;
+}
+.sc-add:hover { color: var(--text); border-color: var(--text); }
+.sc-add.recording { border-color: var(--accent); color: var(--accent); border-style: solid; }
+
 .btn {
   padding: 8px 12px;
   border-radius: 8px;

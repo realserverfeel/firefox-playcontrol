@@ -20,9 +20,29 @@
     return out;
   }
 
+  // Migrate shortcuts to the array format and drop empty bindings. Tolerates
+  // the legacy single-string format ("Home" / "") so existing users keep their
+  // settings after upgrading.
+  function normalizeShortcuts(shortcuts) {
+    const out = {};
+    for (const action of Object.keys(shortcuts || {})) {
+      const v = shortcuts[action];
+      if (Array.isArray(v)) {
+        out[action] = v.filter((c) => typeof c === "string" && c.length > 0);
+      } else if (typeof v === "string" && v.length > 0) {
+        out[action] = [v];
+      } else {
+        out[action] = [];
+      }
+    }
+    return out;
+  }
+
   async function getSettings() {
     const res = await api.storage.local.get(D.STORAGE_KEYS.settings);
-    return deepMerge(D.DEFAULT_SETTINGS, res[D.STORAGE_KEYS.settings] || {});
+    const merged = deepMerge(D.DEFAULT_SETTINGS, res[D.STORAGE_KEYS.settings] || {});
+    merged.shortcuts = normalizeShortcuts(merged.shortcuts);
+    return merged;
   }
 
   async function setSettings(settings) {
