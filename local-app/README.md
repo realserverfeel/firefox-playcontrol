@@ -61,14 +61,25 @@ The extension decides which YouTube tab to control:
 
 - **Enable / Disable hotkeys** — toggle global hotkeys without quitting (same
   as pressing the master toggle hotkey, default `Ctrl+Alt+P`).
-- **Edit configuration…** — opens `config.json` (next to the exe) in your
-  editor. Change hotkeys, port, overlay style.
-- **Reload configuration** — re-reads `config.json` and re-registers hotkeys
-  (also restarts the server if you changed the port).
-- **Show status** — connection state + current hotkey map.
+- **Settings…** — opens the settings window (double-clicking the tray icon does
+  the same). Three tabs:
+  - **General** — WebSocket port, master toggle hotkey (click the box and press
+    a combo to record it), start-with-Windows.
+  - **Overlay (OSD)** — show/hide the overlay, corner, font size, duration,
+    color picker, hide-while-browser-focused, and a **Preview** button.
+  - **Hotkey status** — live list of every global hotkey synced from the
+    extension and whether it is **active**, **off** (master toggle disabled),
+    or **failed** (e.g. already in use by another app), plus connection state.
+  Changes apply immediately on **Save** (the server restarts if you change the
+  port).
+- **Edit config file… / Reload config file** — open/re-read `config.json`
+  directly, for power users who prefer editing JSON.
 - **Start with Windows** — toggles an entry under
   `HKCU\…\CurrentVersion\Run`.
 - **Exit**.
+
+Only one instance runs at a time; launching a second copy just shows a notice
+and exits.
 
 ## Configuration (`config.json`)
 

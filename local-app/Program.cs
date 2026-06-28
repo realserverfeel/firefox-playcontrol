@@ -9,13 +9,27 @@ namespace PlayControlAgent;
 
 static class Program
 {
+    static Mutex? _singleton;
+
     [STAThread]
     static void Main()
     {
+        // Single-instance: a second launch exits so two agents don't fight over
+        // the same WebSocket port and global hotkeys.
+        _singleton = new Mutex(true, @"Global\PlayControlAgentSingleton_4f2a", out bool createdNew);
+        if (!createdNew)
+        {
+            MessageBox.Show(
+                "PlayControl Agent is already running (see the system tray).",
+                "PlayControl Agent", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         try { Application.SetHighDpiMode(HighDpiMode.SystemAware); } catch { /* ignore */ }
-        Application.Run(new TrayAppContext());
+        try { Application.Run(new TrayAppContext()); }
+        finally { _singleton.ReleaseMutex(); }
     }
 }
 
@@ -34,6 +48,7 @@ public class TrayAppContext : ApplicationContext
     WsServer _server;
     bool _connected;
     bool _enabled = true;
+    SettingsForm? _settingsForm;
 
     // Shortcut map (action -> [combos]) synced from the extension. Cached to
     // disk so the same global hotkeys are registered on startup, before the
@@ -83,7 +98,7 @@ public class TrayAppContext : ApplicationContext
             Visible = true,
             Text = "PlayControl Agent",
         };
-        _tray.DoubleClick += (s, e) => ShowStatus();
+        _tray.DoubleClick += (s, e) => OpenSettings();
         BuildMenu();
 
         StartServices();
@@ -153,23 +168,77 @@ public class TrayAppContext : ApplicationContext
 
     void ReloadConfig()
     {
-        _cfg = AppConfig.Load();
+        ApplySettings(AppConfig.Load());
+        _tray.ShowBalloonTip(2500, "PlayControl Agent", "Configuration reloaded.", ToolTipIcon.Info);
+    }
+
+    // ---- public surface used by the settings window ------------------------
+
+    public AppConfig CurrentConfig => _cfg.Clone();
+    public bool IsConnected => _connected;
+    public bool IsEnabled => _enabled;
+    public IReadOnlyList<HotkeyManager.HotkeyStatus> ActionHotkeyStatus => _hotkeys.Status;
+    public HotkeyManager.HotkeyStatus? ToggleHotkeyStatus => _hotkeys.ToggleStatus;
+    public bool AutostartEnabled => IsAutostartEnabled();
+    public static string Label(string action) =>
+        ActionLabels.TryGetValue(action, out var l) ? l : action;
+
+    // Apply a new configuration in-memory, persist it, and re-apply anything
+    // affected (overlay style, server port, master toggle hotkey).
+    public void ApplySettings(AppConfig newCfg)
+    {
+        bool portChanged = newCfg.Port != _cfg.Port;
+        bool toggleChanged = newCfg.ToggleHotkey != _cfg.ToggleHotkey;
+
+        _cfg = newCfg;
+        _cfg.Save();
         _overlay.ApplyConfig(_cfg);
 
-        // Restart the server if the port changed.
-        _server.Stop();
-        _server = new WsServer(_cfg.Port);
-        WireServer(_server);
-        _server.Start();
-
-        _hotkeys.RegisterToggle(_cfg.ToggleHotkey);
-        if (_enabled)
+        if (portChanged)
         {
-            _hotkeys.RegisterShortcuts(_shortcuts);
-            ReportHotkeyErrors();
+            _connected = false;
+            _server.Stop();
+            _server = new WsServer(_cfg.Port);
+            WireServer(_server);
+            _server.Start();
         }
+        if (toggleChanged)
+            _hotkeys.RegisterToggle(_cfg.ToggleHotkey);
+
         UpdateTrayText();
-        _tray.ShowBalloonTip(2500, "PlayControl Agent", "Configuration reloaded.", ToolTipIcon.Info);
+    }
+
+    // Temporarily apply overlay settings and flash a sample so the user can see
+    // the effect before saving. The live config is re-applied when the window
+    // closes.
+    public void PreviewOverlay(AppConfig cfg)
+    {
+        _overlay.ApplyConfig(cfg);
+        _overlay.Flash("PlayControl \u2014 preview  1:23");
+    }
+
+    public void SetAutostart(bool on)
+    {
+        if (on == IsAutostartEnabled()) return;
+        ToggleAutostart();
+    }
+
+    void OpenSettings()
+    {
+        if (_settingsForm != null && !_settingsForm.IsDisposed)
+        {
+            _settingsForm.Activate();
+            return;
+        }
+        _settingsForm = new SettingsForm(this, _appIcon);
+        _settingsForm.FormClosed += (s, e) =>
+        {
+            // Restore the live overlay style (in case Preview changed it).
+            _overlay.ApplyConfig(_cfg);
+            _settingsForm = null;
+        };
+        _settingsForm.Show();
+        _settingsForm.Activate();
     }
 
     // Shortcuts pushed from the extension: cache them and (re)register globally.
@@ -331,9 +400,9 @@ public class TrayAppContext : ApplicationContext
             (s, e) => ToggleEnabled()));
         menu.Items.Add(new ToolStripSeparator());
 
-        menu.Items.Add(new ToolStripMenuItem("Edit configuration\u2026", null, (s, e) => OpenConfig()));
-        menu.Items.Add(new ToolStripMenuItem("Reload configuration", null, (s, e) => ReloadConfig()));
-        menu.Items.Add(new ToolStripMenuItem("Show status", null, (s, e) => ShowStatus()));
+        menu.Items.Add(new ToolStripMenuItem("Settings\u2026", null, (s, e) => OpenSettings()));
+        menu.Items.Add(new ToolStripMenuItem("Edit config file\u2026", null, (s, e) => OpenConfig()));
+        menu.Items.Add(new ToolStripMenuItem("Reload config file", null, (s, e) => ReloadConfig()));
 
         var autostart = new ToolStripMenuItem("Start with Windows", null, (s, e) => ToggleAutostart())
         {
@@ -352,34 +421,6 @@ public class TrayAppContext : ApplicationContext
     {
         string state = !_enabled ? "hotkeys off" : _connected ? "browser connected" : "waiting for browser";
         _tray.Text = $"PlayControl Agent \u2014 {state} (port {_cfg.Port})";
-    }
-
-    void ShowStatus()
-    {
-        string state = !_enabled
-            ? "Hotkeys are disabled."
-            : _connected
-                ? "Browser extension is connected."
-                : "Enabled \u2014 waiting for the browser extension to connect.";
-
-        var lines = _shortcuts
-            .Where(kv => kv.Value != null && kv.Value.Any(c => !string.IsNullOrWhiteSpace(c)))
-            .Select(kv =>
-            {
-                var label = ActionLabels.TryGetValue(kv.Key, out var l) ? l : kv.Key;
-                return $"  {label}  \u2192  {string.Join(", ", kv.Value.Where(c => !string.IsNullOrWhiteSpace(c)))}";
-            })
-            .ToList();
-        string keys = lines.Count == 0
-            ? "No hotkeys synced yet (configure them in the extension and connect)."
-            : string.Join("\n", lines);
-
-        MessageBox.Show(
-            $"{state}\n\nPort: {_cfg.Port}\nMaster toggle: {_cfg.ToggleHotkey}\n\n" +
-            $"Global hotkeys (synced from the extension):\n{keys}\n\nConfig file:\n{AppConfig.ConfigPath}",
-            "PlayControl Agent",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Information);
     }
 
     void OpenConfig()

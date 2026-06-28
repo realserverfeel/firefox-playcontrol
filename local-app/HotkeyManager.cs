@@ -32,6 +32,11 @@ public class HotkeyManager : NativeWindow, IDisposable
     public event Action? ToggleRequested;
     public List<string> Errors { get; } = new();
 
+    // Per-combo registration outcome, for the settings UI status view.
+    public record HotkeyStatus(string Action, string Combo, bool Ok, string Error);
+    public List<HotkeyStatus> Status { get; } = new();
+    public HotkeyStatus? ToggleStatus { get; private set; }
+
     public HotkeyManager()
     {
         CreateHandle(new CreateParams());
@@ -42,6 +47,7 @@ public class HotkeyManager : NativeWindow, IDisposable
     {
         UnregisterActions();
         Errors.Clear();
+        Status.Clear();
         foreach (var kv in map)
         {
             var action = kv.Key;
@@ -52,13 +58,20 @@ public class HotkeyManager : NativeWindow, IDisposable
                 if (!TryParse(combo, out uint mods, out uint vk))
                 {
                     Errors.Add($"Unrecognized hotkey: \"{combo}\"");
+                    Status.Add(new HotkeyStatus(action, combo, false, "unrecognized key"));
                     continue;
                 }
                 int id = _nextId++;
                 if (RegisterHotKey(Handle, id, mods | (uint)Mods.NoRepeat, vk))
+                {
                     _idToAction[id] = action;
+                    Status.Add(new HotkeyStatus(action, combo, true, ""));
+                }
                 else
+                {
                     Errors.Add($"Could not register \"{combo}\" (already in use by another app?)");
+                    Status.Add(new HotkeyStatus(action, combo, false, "in use by another app"));
+                }
             }
         }
     }
@@ -85,9 +98,11 @@ public class HotkeyManager : NativeWindow, IDisposable
         if (RegisterHotKey(Handle, ToggleId, mods | (uint)Mods.NoRepeat, vk))
         {
             _toggleRegistered = true;
+            ToggleStatus = new HotkeyStatus("toggle", combo, true, "");
             return true;
         }
         Errors.Add($"Could not register toggle \"{combo}\" (already in use?)");
+        ToggleStatus = new HotkeyStatus("toggle", combo, false, "in use by another app");
         return false;
     }
 
@@ -116,6 +131,12 @@ public class HotkeyManager : NativeWindow, IDisposable
     // ---- parsing -----------------------------------------------------------
 
     static bool TryParse(string combo, out uint mods, out uint vk)
+        => TryParseStatic(combo, out mods, out vk);
+
+    // Public, allocation-free validity check used by the settings UI.
+    public static bool IsValidCombo(string combo) => TryParseStatic(combo, out _, out _);
+
+    static bool TryParseStatic(string combo, out uint mods, out uint vk)
     {
         mods = 0;
         vk = 0;

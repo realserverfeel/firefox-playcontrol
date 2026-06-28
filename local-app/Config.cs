@@ -101,6 +101,22 @@ public class AppConfig
         return d;
     }
 
+    public AppConfig Clone()
+    {
+        return new AppConfig
+        {
+            Port = Port,
+            ShowOverlay = ShowOverlay,
+            OverlayFontSize = OverlayFontSize,
+            OverlayColor = OverlayColor,
+            OverlayCorner = OverlayCorner,
+            OverlayDurationMs = OverlayDurationMs,
+            ToggleHotkey = ToggleHotkey,
+            SuppressOverlayWhenBrowserFocused = SuppressOverlayWhenBrowserFocused,
+            Hotkeys = new Dictionary<string, string>(Hotkeys),
+        };
+    }
+
     public void Save()
     {
         try
