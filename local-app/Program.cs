@@ -287,11 +287,13 @@ public class TrayAppContext : ApplicationContext
         _ = _server.SendCommand(action);
     }
 
-    // Skip the local overlay when the browser is the foreground window: the
-    // in-page OSD already shows feedback there, so avoid a duplicate.
-    void MaybeFlash(string text)
+    // Skip the local overlay only when the in-page OSD is actually visible to
+    // the user: the browser is the foreground window AND the controlled tab is
+    // the active tab there. If the user is on a different tab or another app,
+    // the in-page OSD isn't visible, so we still show the local overlay.
+    void MaybeFlash(string text, bool targetVisible)
     {
-        if (_cfg.SuppressOverlayWhenBrowserFocused && IsBrowserForeground())
+        if (_cfg.SuppressOverlayWhenBrowserFocused && targetVisible && IsBrowserForeground())
             return;
         _overlay.Flash(text);
     }
@@ -311,6 +313,8 @@ public class TrayAppContext : ApplicationContext
             string label = ActionLabels.TryGetValue(action, out var l) ? l : action;
 
             root.TryGetProperty("info", out var info);
+            bool visible = root.TryGetProperty("visible", out var visEl) &&
+                           visEl.ValueKind == JsonValueKind.True;
 
             if (!ok)
             {
@@ -321,7 +325,8 @@ public class TrayAppContext : ApplicationContext
                     "tab-unreachable" => "reload the YouTube tab",
                     _ => "no YouTube tab",
                 };
-                MaybeFlash($"{label}  \u2014 {msg}");
+                // Errors are never shown in-page, so always surface them.
+                MaybeFlash($"{label}  \u2014 {msg}", false);
                 return;
             }
 
@@ -333,7 +338,7 @@ public class TrayAppContext : ApplicationContext
             {
                 suffix = "  " + FormatTime(ct.GetDouble());
             }
-            MaybeFlash(label + suffix);
+            MaybeFlash(label + suffix, visible);
         }
         catch
         {

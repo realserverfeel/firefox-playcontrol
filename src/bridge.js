@@ -115,6 +115,7 @@
       action: msg.action,
       ok: !!result.ok,
       info: result.info || null,
+      visible: !!result.visible,
     });
   }
 

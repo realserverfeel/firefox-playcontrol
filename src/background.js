@@ -54,8 +54,21 @@
     return null;
   }
 
-  // Run an action on the resolved target tab. Returns { ok, info } so the
-  // companion app can render accurate feedback in its overlay.
+  // Whether the target tab is the active tab of the currently focused browser
+  // window. The companion app uses this to decide if its overlay would be
+  // redundant: only when the controlled tab is actually visible does the
+  // in-page OSD show, so the app suppresses its overlay only in that case.
+  async function isTargetTabVisible(tabId) {
+    try {
+      const tabs = await api.tabs.query({ active: true, lastFocusedWindow: true });
+      return !!(tabs && tabs.length > 0 && tabs[0].id === tabId);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Run an action on the resolved target tab. Returns { ok, info, visible } so
+  // the companion app can render accurate feedback in its overlay.
   async function routeCommand(action) {
     const tabId = await resolveTargetTabId();
     if (tabId == null) return { ok: false, info: "no-youtube-tab" };
@@ -75,7 +88,8 @@
       } catch (e) {
         /* state is best-effort */
       }
-      return { ok: true, info: info };
+      const visible = await isTargetTabVisible(tabId);
+      return { ok: true, info: info, visible: visible };
     } catch (e) {
       // Content script not present (e.g. tab still loading).
       return { ok: false, info: "tab-unreachable" };

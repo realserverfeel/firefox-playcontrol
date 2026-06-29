@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Runtime.InteropServices;
 
 namespace PlayControlAgent;
 
@@ -78,9 +79,31 @@ public class OverlayForm : Form
         _hideTimer.Start();
     }
 
+    [DllImport("user32.dll")]
+    static extern IntPtr GetForegroundWindow();
+
+    // Show on whichever monitor the user is actually looking at: the screen
+    // containing the foreground window, falling back to the cursor's screen and
+    // then the primary screen.
+    static Rectangle ActiveWorkingArea()
+    {
+        try
+        {
+            var h = GetForegroundWindow();
+            if (h != IntPtr.Zero)
+                return Screen.FromHandle(h).WorkingArea;
+        }
+        catch
+        {
+            // fall through
+        }
+        try { return Screen.FromPoint(Cursor.Position).WorkingArea; }
+        catch { return Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1280, 720); }
+    }
+
     void PositionToCorner()
     {
-        var wa = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1280, 720);
+        var wa = ActiveWorkingArea();
         const int margin = 40;
         int x, y;
         switch ((_cfg.OverlayCorner ?? "top-right").ToLowerInvariant())
