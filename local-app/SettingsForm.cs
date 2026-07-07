@@ -7,6 +7,9 @@ namespace PlayControlAgent;
 // live status of every global hotkey synced from the extension. The action
 // hotkeys themselves are configured in the browser extension (single source of
 // truth) and are only displayed here.
+//
+// Layout uses Dock/Anchor and TableLayoutPanel so the form scales correctly at
+// any Windows DPI setting (100 %, 125 %, 150 %, …).
 public class SettingsForm : Form
 {
     readonly TrayAppContext _ctx;
@@ -35,34 +38,39 @@ public class SettingsForm : Form
     public SettingsForm(TrayAppContext ctx, Icon icon)
     {
         _ctx = ctx;
-        Text = "PlayControl Agent — Settings";
+        Text = "PlayControl Agent \u2014 Settings";
         Icon = icon;
+        AutoScaleMode = AutoScaleMode.Dpi;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(460, 460);
+        ClientSize = new Size(540, 500);
         Font = new Font("Segoe UI", 9f);
 
-        var tabs = new TabControl { Dock = DockStyle.Top, Height = 400 };
+        // Bottom button panel (fixed height, docked to bottom).
+        var btnPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            FlowDirection = FlowDirection.RightToLeft,
+            Height = 44,
+            Padding = new Padding(8, 6, 8, 6),
+        };
+        var cancel = new Button { Text = "Close", DialogResult = DialogResult.Cancel, Size = new Size(84, 32) };
+        var save = new Button { Text = "Save", DialogResult = DialogResult.OK, Size = new Size(84, 32) };
+        save.Click += (s, e) => OnSave();
+        btnPanel.Controls.Add(cancel);
+        btnPanel.Controls.Add(save);
+        Controls.Add(btnPanel);
+        AcceptButton = save;
+        CancelButton = cancel;
+
+        // Tab control fills the rest.
+        var tabs = new TabControl { Dock = DockStyle.Fill };
         tabs.TabPages.Add(BuildGeneralTab());
         tabs.TabPages.Add(BuildOverlayTab());
         tabs.TabPages.Add(BuildStatusTab());
         Controls.Add(tabs);
-
-        var save = new Button { Text = "Save", DialogResult = DialogResult.OK };
-        save.Location = new Point(ClientSize.Width - 180, 414);
-        save.Size = new Size(80, 30);
-        save.Click += (s, e) => OnSave();
-
-        var cancel = new Button { Text = "Close", DialogResult = DialogResult.Cancel };
-        cancel.Location = new Point(ClientSize.Width - 92, 414);
-        cancel.Size = new Size(80, 30);
-
-        Controls.Add(save);
-        Controls.Add(cancel);
-        AcceptButton = save;
-        CancelButton = cancel;
 
         LoadFromConfig(_ctx.CurrentConfig);
         RefreshStatus();
@@ -77,160 +85,254 @@ public class SettingsForm : Form
 
     TabPage BuildGeneralTab()
     {
-        var page = new TabPage("General");
-        int y = 18;
+        var page = new TabPage("General") { Padding = new Padding(12) };
 
-        page.Controls.Add(MakeLabel("WebSocket port (must match the extension):", 16, y));
-        y += 22;
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 2,
+            Padding = new Padding(4),
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        // Row 0: port label
+        var portLabel = new Label
+        {
+            Text = "WebSocket port (must match the extension):",
+            AutoSize = true,
+            Margin = new Padding(0, 8, 0, 4),
+        };
+        layout.Controls.Add(portLabel, 0, 0);
+        layout.SetColumnSpan(portLabel, 2);
+
+        // Row 1: port input
         _port = new NumericUpDown
         {
-            Location = new Point(18, y),
-            Width = 100,
+            Width = 110,
             Minimum = 1,
             Maximum = 65535,
+            Margin = new Padding(0, 0, 0, 16),
         };
-        page.Controls.Add(_port);
-        y += 40;
+        layout.Controls.Add(_port, 0, 1);
 
-        page.Controls.Add(MakeLabel("Master toggle hotkey (enables/disables all global hotkeys):", 16, y));
-        y += 22;
-        _toggle = new HotkeyBox { Location = new Point(18, y), Width = 220, ReadOnly = true };
+        // Row 2: toggle label
+        var toggleLabel = new Label
+        {
+            Text = "Master toggle hotkey (enables / disables all global hotkeys):",
+            AutoSize = true,
+            MaximumSize = new Size(500, 0),
+            Margin = new Padding(0, 4, 0, 4),
+        };
+        layout.Controls.Add(toggleLabel, 0, 2);
+        layout.SetColumnSpan(toggleLabel, 2);
+
+        // Row 3: toggle input + clear button
+        var toggleRow = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = new Padding(0, 0, 0, 2),
+        };
+        _toggle = new HotkeyBox
+        {
+            Width = 220,
+            ReadOnly = true,
+            Margin = new Padding(0, 0, 8, 0),
+        };
         _toggle.ComboChanged += (s, e) => UpdateToggleValidity();
-        page.Controls.Add(_toggle);
-
-        var clearToggle = new Button { Text = "Clear", Location = new Point(246, y - 1), Size = new Size(70, 26) };
+        var clearToggle = new Button
+        {
+            Text = "Clear",
+            Size = new Size(72, 28),
+        };
         clearToggle.Click += (s, e) => { _toggle.Combo = ""; UpdateToggleValidity(); };
-        page.Controls.Add(clearToggle);
-        y += 26;
+        toggleRow.Controls.Add(_toggle);
+        toggleRow.Controls.Add(clearToggle);
+        layout.Controls.Add(toggleRow, 0, 3);
+        layout.SetColumnSpan(toggleRow, 2);
+
+        // Row 4: toggle status label
         _toggleStatus = new Label
         {
-            Location = new Point(18, y),
-            Size = new Size(420, 18),
+            AutoSize = true,
+            MaximumSize = new Size(500, 0),
             ForeColor = Color.Gray,
+            Margin = new Padding(0, 0, 0, 20),
             Text = "Click the box and press a key combination.",
         };
-        page.Controls.Add(_toggleStatus);
-        y += 40;
+        layout.Controls.Add(_toggleStatus, 0, 4);
+        layout.SetColumnSpan(_toggleStatus, 2);
 
+        // Row 5: autostart
         _autostart = new CheckBox
         {
             Text = "Start with Windows",
-            Location = new Point(18, y),
             AutoSize = true,
+            Margin = new Padding(0, 4, 0, 0),
         };
-        page.Controls.Add(_autostart);
+        layout.Controls.Add(_autostart, 0, 5);
+        layout.SetColumnSpan(_autostart, 2);
 
+        page.Controls.Add(layout);
         return page;
     }
 
     TabPage BuildOverlayTab()
     {
-        var page = new TabPage("Overlay (OSD)");
-        int y = 18;
+        var page = new TabPage("Overlay (OSD)") { Padding = new Padding(12) };
 
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 2,
+            Padding = new Padding(4),
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        int row = 0;
+
+        // Row 0: show overlay checkbox
         _showOverlay = new CheckBox
         {
             Text = "Show on-screen overlay when controlling video",
-            Location = new Point(18, y),
             AutoSize = true,
+            Margin = new Padding(0, 8, 0, 4),
         };
         _showOverlay.CheckedChanged += (s, e) => UpdateOverlayEnabled();
-        page.Controls.Add(_showOverlay);
-        y += 28;
+        layout.Controls.Add(_showOverlay, 0, row);
+        layout.SetColumnSpan(_showOverlay, 2);
+        row++;
 
+        // Row 1: suppress when browser
         _suppressWhenBrowser = new CheckBox
         {
-            Text = "Hide overlay while the browser is focused (in-page OSD shows instead)",
-            Location = new Point(18, y),
+            Text = "Hide overlay while the controlled tab is visible in the browser",
             AutoSize = true,
+            MaximumSize = new Size(500, 0),
+            Margin = new Padding(0, 0, 0, 16),
         };
-        page.Controls.Add(_suppressWhenBrowser);
-        y += 40;
+        layout.Controls.Add(_suppressWhenBrowser, 0, row);
+        layout.SetColumnSpan(_suppressWhenBrowser, 2);
+        row++;
 
-        page.Controls.Add(MakeLabel("Corner:", 16, y + 4));
+        // Row 2: corner
+        layout.Controls.Add(MakeFieldLabel("Corner:"), 0, row);
         _corner = new ComboBox
         {
-            Location = new Point(120, y),
             Width = 160,
             DropDownStyle = ComboBoxStyle.DropDownList,
+            Margin = new Padding(0, 2, 0, 6),
         };
         _corner.Items.AddRange(new object[] { "top-right", "top-left", "bottom-right", "bottom-left" });
-        page.Controls.Add(_corner);
-        y += 34;
+        layout.Controls.Add(_corner, 1, row);
+        row++;
 
-        page.Controls.Add(MakeLabel("Font size:", 16, y + 4));
+        // Row 3: font size
+        layout.Controls.Add(MakeFieldLabel("Font size:"), 0, row);
         _fontSize = new NumericUpDown
         {
-            Location = new Point(120, y),
             Width = 80,
             Minimum = 10,
             Maximum = 96,
+            Margin = new Padding(0, 2, 0, 6),
         };
-        page.Controls.Add(_fontSize);
-        y += 34;
+        layout.Controls.Add(_fontSize, 1, row);
+        row++;
 
-        page.Controls.Add(MakeLabel("Duration (ms):", 16, y + 4));
+        // Row 4: duration
+        layout.Controls.Add(MakeFieldLabel("Duration (ms):"), 0, row);
         _duration = new NumericUpDown
         {
-            Location = new Point(120, y),
-            Width = 90,
+            Width = 100,
             Minimum = 300,
             Maximum = 10000,
             Increment = 100,
+            Margin = new Padding(0, 2, 0, 6),
         };
-        page.Controls.Add(_duration);
-        y += 34;
+        layout.Controls.Add(_duration, 1, row);
+        row++;
 
-        page.Controls.Add(MakeLabel("Color:", 16, y + 4));
+        // Row 5: color
+        layout.Controls.Add(MakeFieldLabel("Color:"), 0, row);
+        var colorRow = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = new Padding(0, 0, 0, 16),
+        };
         _colorSwatch = new Panel
         {
-            Location = new Point(120, y),
             Size = new Size(40, 26),
             BorderStyle = BorderStyle.FixedSingle,
+            Margin = new Padding(0, 2, 8, 0),
         };
-        page.Controls.Add(_colorSwatch);
-        _colorBtn = new Button { Text = "Choose…", Location = new Point(168, y - 1), Size = new Size(90, 28) };
+        _colorBtn = new Button { Text = "Choose\u2026", Size = new Size(90, 28) };
         _colorBtn.Click += (s, e) => PickColor();
-        page.Controls.Add(_colorBtn);
-        y += 40;
+        colorRow.Controls.Add(_colorSwatch);
+        colorRow.Controls.Add(_colorBtn);
+        layout.Controls.Add(colorRow, 1, row);
+        row++;
 
-        var preview = new Button { Text = "Preview overlay", Location = new Point(18, y), Size = new Size(140, 30) };
+        // Row 6: preview button
+        var preview = new Button
+        {
+            Text = "Preview overlay",
+            Size = new Size(140, 32),
+            Margin = new Padding(0, 4, 0, 0),
+        };
         preview.Click += (s, e) => _ctx.PreviewOverlay(BuildConfigFromControls());
-        page.Controls.Add(preview);
+        layout.Controls.Add(preview, 0, row);
+        layout.SetColumnSpan(preview, 2);
 
+        page.Controls.Add(layout);
         return page;
     }
 
     TabPage BuildStatusTab()
     {
-        var page = new TabPage("Hotkey status");
+        var page = new TabPage("Hotkey status") { Padding = new Padding(12) };
         _connState = new Label
         {
-            Location = new Point(12, 12),
-            Size = new Size(420, 36),
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            MaximumSize = new Size(500, 0),
             Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            Margin = new Padding(0, 0, 0, 8),
         };
         page.Controls.Add(_connState);
 
         _statusList = new ListView
         {
-            Location = new Point(12, 52),
-            Size = new Size(412, 300),
+            Dock = DockStyle.Fill,
             View = View.Details,
             FullRowSelect = true,
             GridLines = true,
             MultiSelect = false,
         };
-        _statusList.Columns.Add("Action", 150);
-        _statusList.Columns.Add("Key", 130);
-        _statusList.Columns.Add("Status", 120);
+        _statusList.Columns.Add("Action", 160);
+        _statusList.Columns.Add("Key", 150);
+        _statusList.Columns.Add("Status", 140);
         page.Controls.Add(_statusList);
+
+        // Dock order matters: add list first, then label, so label docks on top.
+        page.Controls.SetChildIndex(_connState, 0);
 
         return page;
     }
 
-    static Label MakeLabel(string text, int x, int y) =>
-        new() { Text = text, Location = new Point(x, y), AutoSize = true };
+    static Label MakeFieldLabel(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        Anchor = AnchorStyles.Left,
+        Margin = new Padding(0, 4, 12, 4),
+    };
 
     // ---- load / save -------------------------------------------------------
 
@@ -300,7 +402,7 @@ public class SettingsForm : Form
         if (combo.Length == 0)
         {
             _toggleStatus.ForeColor = Color.Gray;
-            _toggleStatus.Text = "No master toggle set — you can still use the tray menu to enable/disable.";
+            _toggleStatus.Text = "No master toggle set \u2014 you can still use the tray menu to enable/disable.";
         }
         else if (HotkeyManager.IsValidCombo(combo))
         {
@@ -336,8 +438,8 @@ public class SettingsForm : Form
         _connState.Text = !enabled
             ? "Hotkeys are DISABLED (master toggle is off)."
             : connected
-                ? "Enabled — browser extension connected."
-                : "Enabled — waiting for the browser extension to connect.";
+                ? "Enabled \u2014 browser extension connected."
+                : "Enabled \u2014 waiting for the browser extension to connect.";
         _connState.ForeColor = !enabled ? Color.Firebrick : connected ? Color.SeaGreen : Color.DarkGoldenrod;
 
         _statusList.BeginUpdate();
