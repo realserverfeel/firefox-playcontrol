@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PlayControl &#8211; Bookmark Manager</title>
+  <link rel="stylesheet" href="manager.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">&#9654; PlayControl</div>
+    <div class="spacer"></div>
+    <button id="export" class="btn">Export</button>
+    <button id="importBtn" class="btn">Import</button>
+    <button id="settings" class="btn">Settings</button>
+    <input type="file" id="importFile" accept="application/json" hidden />
+  </header>
+
+  <main class="wrap">
+    <!-- List view -->
+    <section id="list-view">
+      <div class="toolbar">
+        <input type="search" id="search" placeholder="Search videos\u2026" />
+        <select id="sort">
+          <option value="recent">Recently watched</option>
+          <option value="bookmarks">Most bookmarks</option>
+          <option value="title">Title (A\u2013Z)</option>
+        </select>
+      </div>
+      <div id="videos" class="videos"></div>
+      <div id="empty" class="empty" hidden>No bookmarks yet. Open a YouTube video and press your "Add bookmark" key.</div>
+    </section>
+
+    <!-- Detail view -->
+    <section id="detail-view" hidden>
+      <div class="detail-head">
+        <button id="back" class="btn">&#8592; Back</button>
+        <div id="detail-title" class="detail-title"></div>
+        <a id="open-yt" class="btn" target="_blank" rel="noopener">Open on YouTube</a>
+      </div>
+      <div class="timeline" id="timeline"></div>
+      <table class="bm-table">
+        <thead>
+          <tr><th>#</th><th>Time</th><th>Note</th><th class="actions-col">Actions</th></tr>
+        </thead>
+        <tbody id="bm-body"></tbody>
+      </table>
+      <div class="detail-actions">
+        <button id="clear-video" class="btn danger">Clear all bookmarks</button>
+        <button id="delete-video" class="btn danger">Delete video record</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="../src/defaults.js"></script>
+  <script src="../src/storage.js"></script>
+  <script src="manager.js"></script>
+</body>
+</html>

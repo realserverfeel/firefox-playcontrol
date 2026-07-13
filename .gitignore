@@ -1,0 +1,13 @@
+node_modules/
+web-ext-artifacts/
+*.zip
+.DS_Store
+
+# .NET build output (local companion app)
+local-app/bin/
+local-app/obj/
+local-app/publish/
+local-app/dist/
+# Runtime config and synced hotkeys written next to the exe
+local-app/config.json
+local-app/shortcuts.json

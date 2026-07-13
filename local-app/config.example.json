@@ -1,0 +1,10 @@
+{
+  "Port": 8423,
+  "ShowOverlay": true,
+  "OverlayFontSize": 22,
+  "OverlayColor": "#3b9dff",
+  "OverlayCorner": "top-right",
+  "OverlayDurationMs": 1500,
+  "ToggleHotkey": "Ctrl+Alt+P",
+  "SuppressOverlayWhenBrowserFocused": true
+}
