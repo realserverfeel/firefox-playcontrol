@@ -24,19 +24,25 @@
     return typeof u === "string" && /^https?:\/\/([^/]*\.)?youtube\.com\//.test(u);
   }
 
-  async function tabExistsAndYouTube(tabId) {
-    if (tabId == null) return false;
+  // A real video page (watch / shorts / embed / live). The home page, channel
+  // pages, and search results are NOT video pages even though YouTube's SPA
+  // sprinkles autoplaying preview <video>s on them, so those must never be
+  // treated as control targets.
+  function isVideoPageUrl(u) {
+    if (!isYouTubeUrl(u)) return false;
     try {
-      const tab = await api.tabs.get(tabId);
-      return !!tab && isYouTubeUrl(tab.url);
+      const p = new URL(u).pathname;
+      return (
+        p === "/watch" ||
+        p.startsWith("/shorts/") ||
+        p.startsWith("/embed/") ||
+        p.startsWith("/live/")
+      );
     } catch (e) {
       return false;
     }
   }
 
-  // Whether the tab currently has a playable <video>. A YouTube tab that has
-  // navigated to the home page, a channel, or search results has none, so it
-  // must not be treated as a control target even though its URL is youtube.com.
   async function tabHasVideo(tabId) {
     if (tabId == null) return false;
     try {
@@ -47,25 +53,43 @@
     }
   }
 
-  async function resolveTargetTabId() {
-    // A manual pin is an explicit override: honor it while the tab still exists
-    // and has a video.
-    if (await tabHasVideo(pinnedTabId)) return pinnedTabId;
-    if (pinnedTabId != null && !(await tabExistsAndYouTube(pinnedTabId))) {
-      pinnedTabId = null; // pinned tab gone
+  // A tab is controllable only when it is on a real video page AND currently
+  // has a playable <video>.
+  async function tabControllable(tabId) {
+    if (tabId == null) return false;
+    let tab;
+    try {
+      tab = await api.tabs.get(tabId);
+    } catch (e) {
+      return false;
     }
-    if (await tabHasVideo(lastActiveYouTubeTabId)) {
+    if (!tab || !isVideoPageUrl(tab.url)) return false;
+    return await tabHasVideo(tabId);
+  }
+
+  async function resolveTargetTabId() {
+    // A manual pin is an explicit override: honor it while it stays controllable.
+    if (await tabControllable(pinnedTabId)) return pinnedTabId;
+    if (pinnedTabId != null) {
+      try {
+        const t = await api.tabs.get(pinnedTabId);
+        if (!t) pinnedTabId = null;
+      } catch (e) {
+        pinnedTabId = null; // pinned tab gone
+      }
+    }
+    if (await tabControllable(lastActiveYouTubeTabId)) {
       return lastActiveYouTubeTabId;
     }
     lastActiveYouTubeTabId = null;
-    // Fall back to the most recently accessed YouTube tab that actually has a
-    // video, so navigating another tab to the home page never steals control.
+    // Fall back to the most recently accessed YouTube video tab, so navigating
+    // another tab to the home page or a channel never steals control.
     try {
       const tabs = await api.tabs.query({ url: "*://*.youtube.com/*" });
       if (tabs && tabs.length) {
         tabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
         for (const t of tabs) {
-          if (await tabHasVideo(t.id)) {
+          if (isVideoPageUrl(t.url) && (await tabHasVideo(t.id))) {
             lastActiveYouTubeTabId = t.id;
             return t.id;
           }
@@ -159,7 +183,7 @@
   // ---- tab activity ------------------------------------------------------
 
   api.tabs.onActivated.addListener(async ({ tabId }) => {
-    if (await tabHasVideo(tabId)) lastActiveYouTubeTabId = tabId;
+    if (await tabControllable(tabId)) lastActiveYouTubeTabId = tabId;
   });
 
   api.tabs.onRemoved.addListener((tabId) => {
@@ -185,7 +209,7 @@
     // A YouTube tab reports user activity (key used / playback). Mark it as the
     // most recent control target.
     if (msg.type === "PC_ACTIVITY") {
-      if (sender.tab && msg.hasVideo && isYouTubeUrl(sender.tab.url)) {
+      if (sender.tab && msg.hasVideo && isVideoPageUrl(sender.tab.url)) {
         lastActiveYouTubeTabId = sender.tab.id;
       }
       return false;
