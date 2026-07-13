@@ -350,7 +350,7 @@
     if (now - lastActivityPing < 1000) return;
     lastActivityPing = now;
     try {
-      api.runtime.sendMessage({ type: "PC_ACTIVITY" });
+      api.runtime.sendMessage({ type: "PC_ACTIVITY", hasVideo: !!getVideo() });
     } catch (e) {
       /* ignore */
     }

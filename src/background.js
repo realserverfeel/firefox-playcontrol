@@ -34,19 +34,42 @@
     }
   }
 
+  // Whether the tab currently has a playable <video>. A YouTube tab that has
+  // navigated to the home page, a channel, or search results has none, so it
+  // must not be treated as a control target even though its URL is youtube.com.
+  async function tabHasVideo(tabId) {
+    if (tabId == null) return false;
+    try {
+      const resp = await api.tabs.sendMessage(tabId, { type: "PC_GET_STATE" });
+      return !!(resp && resp.hasVideo);
+    } catch (e) {
+      return false;
+    }
+  }
+
   async function resolveTargetTabId() {
-    if (await tabExistsAndYouTube(pinnedTabId)) return pinnedTabId;
-    if (pinnedTabId != null) pinnedTabId = null; // pinned tab gone
-    if (await tabExistsAndYouTube(lastActiveYouTubeTabId)) {
+    // A manual pin is an explicit override: honor it while the tab still exists
+    // and has a video.
+    if (await tabHasVideo(pinnedTabId)) return pinnedTabId;
+    if (pinnedTabId != null && !(await tabExistsAndYouTube(pinnedTabId))) {
+      pinnedTabId = null; // pinned tab gone
+    }
+    if (await tabHasVideo(lastActiveYouTubeTabId)) {
       return lastActiveYouTubeTabId;
     }
     lastActiveYouTubeTabId = null;
-    // Fall back to the most recently accessed YouTube tab.
+    // Fall back to the most recently accessed YouTube tab that actually has a
+    // video, so navigating another tab to the home page never steals control.
     try {
       const tabs = await api.tabs.query({ url: "*://*.youtube.com/*" });
       if (tabs && tabs.length) {
         tabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
-        return tabs[0].id;
+        for (const t of tabs) {
+          if (await tabHasVideo(t.id)) {
+            lastActiveYouTubeTabId = t.id;
+            return t.id;
+          }
+        }
       }
     } catch (e) {
       /* ignore */
@@ -136,7 +159,7 @@
   // ---- tab activity ------------------------------------------------------
 
   api.tabs.onActivated.addListener(async ({ tabId }) => {
-    if (await tabExistsAndYouTube(tabId)) lastActiveYouTubeTabId = tabId;
+    if (await tabHasVideo(tabId)) lastActiveYouTubeTabId = tabId;
   });
 
   api.tabs.onRemoved.addListener((tabId) => {
@@ -162,7 +185,7 @@
     // A YouTube tab reports user activity (key used / playback). Mark it as the
     // most recent control target.
     if (msg.type === "PC_ACTIVITY") {
-      if (sender.tab && isYouTubeUrl(sender.tab.url)) {
+      if (sender.tab && msg.hasVideo && isYouTubeUrl(sender.tab.url)) {
         lastActiveYouTubeTabId = sender.tab.id;
       }
       return false;
